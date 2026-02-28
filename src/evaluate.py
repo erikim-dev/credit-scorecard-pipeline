@@ -297,36 +297,54 @@ def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(data_dir / "train_features.csv")
-    # TODO: load held-out test set if available
 
-    # Load WoE encoder if available (needed for scorecard)
+    # Use a proper hold-out split (last 20% by row order, reproducible)
+    split_idx = int(len(df) * 0.8)
+    df_test = df.iloc[split_idx:].reset_index(drop=True)
+    print(f"Hold-out test set: {len(df_test):,} rows  |  Default rate: {df_test['TARGET'].mean():.2%}\n")
+
+    # Load WoE encoder and scaler if available (needed for scorecard)
     woe_encoder = None
+    scaler = None
     woe_path = models_dir / "woe_encoder.pkl"
+    scaler_path = models_dir / "scaler.pkl"
+    selected_path = models_dir / "selected_features.json"
+
     if woe_path.exists():
         woe_encoder = joblib.load(woe_path)
+    if scaler_path.exists():
+        scaler = joblib.load(scaler_path)
+
+    selected_features = None
+    if selected_path.exists():
+        import json as _json
+        with open(selected_path) as f:
+            selected_features = _json.load(f)
 
     results = {}
-    for pkl in models_dir.glob("*.pkl"):
-        if "encoder" in pkl.stem:
+    for pkl in sorted(models_dir.glob("*.pkl")):
+        if "encoder" in pkl.stem or "scaler" in pkl.stem:
             continue
         model = joblib.load(pkl)
         name = pkl.stem
 
-        feature_cols = [c for c in df.columns if c not in ("TARGET", "SK_ID_CURR", "SK_ID_PREV")]
-        X = df[feature_cols].copy()
+        feature_cols = [c for c in df_test.columns if c not in ("TARGET", "SK_ID_CURR", "SK_ID_PREV")]
+        X = df_test[feature_cols].copy()
 
         if "scorecard" in name and woe_encoder is not None:
-            # Scorecard expects WoE-encoded numeric features
             numeric_cols = X.select_dtypes(include="number").columns.tolist()
+            if selected_features:
+                numeric_cols = [c for c in selected_features if c in numeric_cols]
             X = woe_encoder.transform(X[numeric_cols]).fillna(0)
+            if scaler is not None:
+                X = pd.DataFrame(scaler.transform(X), columns=X.columns)
         else:
-            # Encode categoricals for tree models
             cat_cols = X.select_dtypes(include=["object", "category"]).columns
             for c in cat_cols:
                 X[c] = X[c].astype("category").cat.codes
 
         y_prob = model.predict_proba(X)[:, 1]
-        y_true = df["TARGET"]
+        y_true = df_test["TARGET"]
 
         auc = roc_auc_score(y_true, y_prob)
         gini = compute_gini(y_true, y_prob)

@@ -47,10 +47,10 @@ graph LR
 
 | Model | AUC | Gini | KS |
 |-------|-----|------|----|
-| Scorecard (Champion) | 0.7566 | 0.5131 | 0.3842 |
-| XGBoost (Challenger) | 0.7823 | 0.5646 | 0.4273 |
+| Scorecard (Champion) | 0.7638 | 0.5276 | 0.3986 |
+| XGBoost (Challenger) | 0.8316 | 0.6632 | 0.5137 |
 
-**Recommendation:** Deploy XGBoost as challenger on 20% of new applications alongside existing scorecard. 90-day parallel run before full cutover. Trigger review if PSI > 0.10 or Gini drops below 0.50.
+**Recommendation:** Deploy XGBoost as challenger on 20% of new applications alongside existing scorecard. 90-day parallel run before full cutover. Trigger review if PSI > 0.10 or Gini drops below 0.55.
 
 ---
 
@@ -206,7 +206,7 @@ Model performance was evaluated across gender, age bands, and education segments
     {"feature": "active_credits", "shap_value": 0.08, "direction": "increases risk"},
     {"feature": "EXT_SOURCE_2", "shap_value": -0.07, "direction": "decreases risk"}
   ],
-  "model_version": "1.0.0"
+  "model_version": "2.0.0"
 }
 ```
 

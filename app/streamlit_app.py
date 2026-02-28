@@ -41,19 +41,26 @@ st.set_page_config(
 # -- Model Loading (standalone mode) --------------------------------
 @st.cache_resource
 def load_models():
-    """Load serialized models + encoder once."""
+    """Load serialized models + encoder + scaler once."""
     import joblib
     models_dir = ROOT / "models"
     artefacts = {}
     xgb_path = models_dir / "xgboost_challenger.pkl"
     sc_path = models_dir / "scorecard_champion.pkl"
     woe_path = models_dir / "woe_encoder.pkl"
+    scaler_path = models_dir / "scaler.pkl"
+    feats_path = models_dir / "selected_features.json"
     if xgb_path.exists():
         artefacts["xgb"] = joblib.load(xgb_path)
     if sc_path.exists():
         artefacts["scorecard"] = joblib.load(sc_path)
     if woe_path.exists():
         artefacts["woe_encoder"] = joblib.load(woe_path)
+    if scaler_path.exists():
+        artefacts["scaler"] = joblib.load(scaler_path)
+    if feats_path.exists():
+        with open(feats_path) as f:
+            artefacts["selected_features"] = json.load(f)
     return artefacts
 
 
@@ -70,39 +77,59 @@ def build_feature_vector(data: dict, feature_cols: list) -> pd.DataFrame:
     """Convert application dict into a 1-row DataFrame aligned to model features."""
     row = {}
 
+    age = abs(data.get("age", 35))
+    income = data.get("income", 100000) or 1
+    credit = data.get("loan_amount", 200000)
+    annuity = data.get("annuity", 15000)
+    goods = data.get("goods_price", 1) or 1
+    emp_yrs = max(data.get("employment_years", 0), 0)
+    ext1 = data.get("ext_source_1", 0.5)
+    ext2 = data.get("ext_source_2", 0.5)
+    ext3 = data.get("ext_source_3", 0.5)
+
     mapping = {
-        "DAYS_BIRTH": -abs(data.get("age", 35)) * 365.25,
-        "AMT_INCOME_TOTAL": data.get("income", 100000),
-        "AMT_CREDIT": data.get("loan_amount", 200000),
-        "AMT_ANNUITY": data.get("annuity", 15000),
-        "AMT_GOODS_PRICE": data.get("goods_price", 0),
-        "DAYS_EMPLOYED": -abs(data.get("employment_years", 0)) * 365.25,
+        "DAYS_BIRTH": -age * 365.25,
+        "AMT_INCOME_TOTAL": income,
+        "AMT_CREDIT": credit,
+        "AMT_ANNUITY": annuity,
+        "AMT_GOODS_PRICE": goods,
+        "DAYS_EMPLOYED": -emp_yrs * 365.25,
         "bureau_loan_count": data.get("bureau_loan_count", 0),
         "active_loans": data.get("active_credits", 0),
         "total_debt": data.get("total_debt", 0),
         "overdue_loan_count": data.get("overdue_count", 0),
-        "EXT_SOURCE_1": data.get("ext_source_1", 0.5),
-        "EXT_SOURCE_2": data.get("ext_source_2", 0.5),
-        "EXT_SOURCE_3": data.get("ext_source_3", 0.5),
+        "EXT_SOURCE_1": ext1,
+        "EXT_SOURCE_2": ext2,
+        "EXT_SOURCE_3": ext3,
+        # Basic ratios
+        "LOAN_INCOME_RATIO": credit / income,
+        "ANNUITY_INCOME_RATIO": annuity / income,
+        "CREDIT_GOODS_RATIO": credit / goods,
+        "CREDIT_TERM": annuity / (credit + 1),
+        "GOODS_INCOME_RATIO": goods / income,
+        "INCOME_PER_PERSON": income,
+        "AGE_YEARS": age,
+        "EMPLOYMENT_YEARS": emp_yrs,
+        "REGISTRATION_YEARS": 5.0,
+        "ID_PUBLISH_YEARS": 5.0,
+        "EMPLOY_TO_AGE_RATIO": emp_yrs / (age + 0.01),
+        # EXT_SOURCE interactions
+        "EXT_SOURCE_MEAN": np.mean([ext1, ext2, ext3]),
+        "EXT_SOURCE_STD": np.std([ext1, ext2, ext3]),
+        "EXT_SOURCE_MIN": min(ext1, ext2, ext3),
+        "EXT_SOURCE_MAX": max(ext1, ext2, ext3),
+        "EXT_SOURCE_RANGE": max(ext1, ext2, ext3) - min(ext1, ext2, ext3),
+        "EXT_SRC_1x2": ext1 * ext2,
+        "EXT_SRC_2x3": ext2 * ext3,
+        "EXT_SRC_1x3": ext1 * ext3,
+        "EXT_SRC2_x_AGE": ext2 * age,
+        "EXT_SRC3_x_AGE": ext3 * age,
+        "PAYMENT_RATE": annuity / (credit + 1),
+        "CREDIT_OVERCHARGE": (credit - goods) / goods,
     }
 
     for col in feature_cols:
         row[col] = mapping.get(col, 0)
-
-    inc = row.get("AMT_INCOME_TOTAL", 1) or 1
-    credit = row.get("AMT_CREDIT", 0)
-    goods = row.get("AMT_GOODS_PRICE", 1) or 1
-    row["LOAN_INCOME_RATIO"] = credit / inc
-    row["ANNUITY_INCOME_RATIO"] = row.get("AMT_ANNUITY", 0) / inc
-    row["CREDIT_GOODS_RATIO"] = credit / goods
-    row["AGE_YEARS"] = abs(data.get("age", 35))
-    row["EMPLOYMENT_YEARS"] = max(data.get("employment_years", 0), 0)
-
-    ext_vals = [
-        row.get("EXT_SOURCE_1"), row.get("EXT_SOURCE_2"), row.get("EXT_SOURCE_3")
-    ]
-    ext_valid = [v for v in ext_vals if v is not None and v > 0]
-    row["EXT_SOURCE_MEAN"] = np.mean(ext_valid) if ext_valid else 0.5
 
     df = pd.DataFrame([row])
     for col in feature_cols:
@@ -204,8 +231,8 @@ def get_model_info() -> dict | None:
             return None
     return {
         "model": "xgboost_challenger",
-        "version": "1.0.0",
-        "features": "197",
+        "version": "2.0.0",
+        "features": "230",
         "mode": "standalone",
     }
 

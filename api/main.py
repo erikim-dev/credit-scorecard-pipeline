@@ -30,7 +30,7 @@ from schemas import (
 )
 from woe_encoder import WoEEncoder
 
-MODEL_VERSION = "1.0.0"
+MODEL_VERSION = "2.0.0"
 
 # ── Load model at startup ────────────────────────────────────
 MODEL_PATH = pathlib.Path(
@@ -106,14 +106,41 @@ def application_to_features(app_in: ApplicationInput) -> pd.DataFrame:
         "EXT_SOURCE_1": app_in.ext_source_1,
         "EXT_SOURCE_2": app_in.ext_source_2,
         "EXT_SOURCE_3": app_in.ext_source_3,
-        # Derived ratios
-        "LOAN_INCOME_RATIO": app_in.loan_amount / (app_in.income + 1),
-        "ANNUITY_INCOME_RATIO": app_in.annuity / (app_in.income + 1),
-        "CREDIT_GOODS_RATIO": (
-            app_in.loan_amount / (app_in.goods_price + 1)
-            if app_in.goods_price > 0 else 1.0
-        ),
     }
+
+    # Derived ratios
+    income = app_in.income + 1
+    goods = app_in.goods_price + 1 if app_in.goods_price > 0 else 1.0
+    ext1 = app_in.ext_source_1
+    ext2 = app_in.ext_source_2
+    ext3 = app_in.ext_source_3
+    age = app_in.age
+
+    data.update({
+        "LOAN_INCOME_RATIO": app_in.loan_amount / income,
+        "ANNUITY_INCOME_RATIO": app_in.annuity / income,
+        "CREDIT_GOODS_RATIO": app_in.loan_amount / goods,
+        "CREDIT_TERM": app_in.annuity / (app_in.loan_amount + 1),
+        "GOODS_INCOME_RATIO": app_in.goods_price / income,
+        "INCOME_PER_PERSON": app_in.income,
+        "DAYS_BIRTH": -abs(age) * 365.25,
+        "DAYS_EMPLOYED": -abs(app_in.employment_years) * 365.25,
+        "REGISTRATION_YEARS": 5.0,
+        "ID_PUBLISH_YEARS": 5.0,
+        "EMPLOY_TO_AGE_RATIO": app_in.employment_years / (age + 0.01),
+        "EXT_SOURCE_MEAN": np.mean([ext1, ext2, ext3]),
+        "EXT_SOURCE_STD": np.std([ext1, ext2, ext3]),
+        "EXT_SOURCE_MIN": min(ext1, ext2, ext3),
+        "EXT_SOURCE_MAX": max(ext1, ext2, ext3),
+        "EXT_SOURCE_RANGE": max(ext1, ext2, ext3) - min(ext1, ext2, ext3),
+        "EXT_SRC_1x2": ext1 * ext2,
+        "EXT_SRC_2x3": ext2 * ext3,
+        "EXT_SRC_1x3": ext1 * ext3,
+        "EXT_SRC2_x_AGE": ext2 * age,
+        "EXT_SRC3_x_AGE": ext3 * age,
+        "PAYMENT_RATE": app_in.annuity / (app_in.loan_amount + 1),
+        "CREDIT_OVERCHARGE": (app_in.loan_amount - app_in.goods_price) / goods,
+    })
 
     # Build full-width DataFrame matching training features
     feature_names = _get_model_features()

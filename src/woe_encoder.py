@@ -66,7 +66,7 @@ class WoEEncoder:
         self._compute_woe(df, col)
 
     def _compute_woe(self, df: pd.DataFrame, col: str):
-        stats = df.groupby("bin")["y"].agg(events="sum", total="count")
+        stats = df.groupby("bin", observed=False)["y"].agg(events="sum", total="count")
         stats["non_events"] = stats["total"] - stats["events"]
 
         total_events = stats["events"].sum()

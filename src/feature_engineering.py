@@ -75,28 +75,73 @@ def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path):
 
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add domain-driven ratios and flags."""
-    # Loan-to-income ratio
+    """Add domain-driven ratios, interactions, and flags."""
+
+    # ── Basic ratios ─────────────────────────────────────────
     df["LOAN_INCOME_RATIO"] = df["AMT_CREDIT"] / (df["AMT_INCOME_TOTAL"] + 1)
-
-    # Annuity-to-income ratio (monthly burden)
     df["ANNUITY_INCOME_RATIO"] = df["AMT_ANNUITY"] / (df["AMT_INCOME_TOTAL"] + 1)
-
-    # Credit-to-goods ratio (financing markup)
     df["CREDIT_GOODS_RATIO"] = df["AMT_CREDIT"] / (df["AMT_GOODS_PRICE"] + 1)
 
-    # Age in years
+    # Credit term in months (higher = longer exposure)
+    df["CREDIT_TERM"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + 1)
+    # Goods-to-income ratio
+    df["GOODS_INCOME_RATIO"] = df["AMT_GOODS_PRICE"] / (df["AMT_INCOME_TOTAL"] + 1)
+    # Income per family member
+    cnt_fam = df.get("CNT_FAM_MEMBERS", df.get("CNT_CHILDREN", pd.Series(0, index=df.index)) + 1)
+    df["INCOME_PER_PERSON"] = df["AMT_INCOME_TOTAL"] / (cnt_fam.clip(lower=1))
+
+    # ── Time-based features ──────────────────────────────────
     df["AGE_YEARS"] = (-df["DAYS_BIRTH"]) / 365.25
+    df["EMPLOYMENT_YEARS"] = (-df["DAYS_EMPLOYED"]).clip(lower=0) / 365.25
+    df["REGISTRATION_YEARS"] = (-df["DAYS_REGISTRATION"]) / 365.25
+    df["ID_PUBLISH_YEARS"] = (-df["DAYS_ID_PUBLISH"]) / 365.25
 
-    # Employment years
-    df["EMPLOYMENT_YEARS"] = (-df["DAYS_EMPLOYED"]) / 365.25
-    df["EMPLOYMENT_YEARS"] = df["EMPLOYMENT_YEARS"].clip(lower=0)
+    # Employment-to-age ratio (work stability)
+    df["EMPLOY_TO_AGE_RATIO"] = df["EMPLOYMENT_YEARS"] / (df["AGE_YEARS"] + 0.01)
+    # Years since last phone change
+    if "DAYS_LAST_PHONE_CHANGE" in df.columns:
+        df["PHONE_CHANGE_YEARS"] = (-df["DAYS_LAST_PHONE_CHANGE"]) / 365.25
 
-    # External source mean
-    ext_cols = [c for c in df.columns if c.startswith("EXT_SOURCE")]
+    # ── External source features (strongest predictors) ──────
+    ext_cols = [c for c in df.columns if c.startswith("EXT_SOURCE_") and c[-1].isdigit()]
     if ext_cols:
         df["EXT_SOURCE_MEAN"] = df[ext_cols].mean(axis=1)
         df["EXT_SOURCE_STD"] = df[ext_cols].std(axis=1)
+        df["EXT_SOURCE_MIN"] = df[ext_cols].min(axis=1)
+        df["EXT_SOURCE_MAX"] = df[ext_cols].max(axis=1)
+        df["EXT_SOURCE_RANGE"] = df["EXT_SOURCE_MAX"] - df["EXT_SOURCE_MIN"]
+        # Product interactions (capture non-linear risk signal)
+        if "EXT_SOURCE_1" in df.columns and "EXT_SOURCE_2" in df.columns:
+            df["EXT_SRC_1x2"] = df["EXT_SOURCE_1"] * df["EXT_SOURCE_2"]
+        if "EXT_SOURCE_2" in df.columns and "EXT_SOURCE_3" in df.columns:
+            df["EXT_SRC_2x3"] = df["EXT_SOURCE_2"] * df["EXT_SOURCE_3"]
+        if "EXT_SOURCE_1" in df.columns and "EXT_SOURCE_3" in df.columns:
+            df["EXT_SRC_1x3"] = df["EXT_SOURCE_1"] * df["EXT_SOURCE_3"]
+        # EXT_SOURCE weighted by age (risk evolves over lifetime)
+        if "EXT_SOURCE_2" in df.columns:
+            df["EXT_SRC2_x_AGE"] = df["EXT_SOURCE_2"] * df["AGE_YEARS"]
+        if "EXT_SOURCE_3" in df.columns:
+            df["EXT_SRC3_x_AGE"] = df["EXT_SOURCE_3"] * df["AGE_YEARS"]
+
+    # ── Document count (proxy for documentation completeness) ─
+    doc_cols = [c for c in df.columns if c.startswith("FLAG_DOCUMENT_")]
+    if doc_cols:
+        df["DOCUMENT_COUNT"] = df[doc_cols].sum(axis=1)
+
+    # ── Address mismatch flags ───────────────────────────────
+    reg_cols = [c for c in df.columns if c.startswith("REG_") and "NOT" in c]
+    if reg_cols:
+        df["ADDR_MISMATCH_COUNT"] = df[reg_cols].sum(axis=1)
+
+    # ── Bureau enquiry intensity ─────────────────────────────
+    bureau_req_cols = [c for c in df.columns if c.startswith("AMT_REQ_CREDIT_BUREAU")]
+    if bureau_req_cols:
+        df["BUREAU_ENQUIRY_TOTAL"] = df[bureau_req_cols].sum(axis=1)
+
+    # ── Annuity / credit capacity ────────────────────────────
+    df["PAYMENT_RATE"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + 1)
+    # How much of credit goes beyond goods price (fees/interest proxy)
+    df["CREDIT_OVERCHARGE"] = (df["AMT_CREDIT"] - df["AMT_GOODS_PRICE"]) / (df["AMT_GOODS_PRICE"] + 1)
 
     return df
 

@@ -8,8 +8,8 @@
 | **Purpose** | Consumer credit default prediction | Consumer credit default prediction |
 | **Target** | Binary: 1 = default, 0 = non-default | Binary: 1 = default, 0 = non-default |
 | **Output** | Probability of default + credit score (300–850) | Probability of default + credit score (300–850) |
-| **Version** | 1.0 | 1.0 |
-| **Date** | 2026-02 | 2026-02 |
+| **Version** | 2.0 | 2.0 |
+| **Date** | 2026-03 | 2026-03 |
 
 ---
 
@@ -28,7 +28,7 @@
 |--------|-------|
 | **Source** | Home Credit Default Risk (Kaggle competition) |
 | **Size** | 307,511 applications |
-| **Features** | 122 original + derived features from 8 relational tables |
+| **Features** | 230 engineered features (122 original + 108 derived) from 8 relational tables |
 | **Target distribution** | 8.07% default rate |
 | **Date range** | Historical (competition dataset) |
 | **Geography** | Emerging market consumer lending |
@@ -47,9 +47,9 @@
 
 | Metric | Champion (Scorecard) | Challenger (XGBoost) |
 |--------|---------------------|---------------------|
-| AUC-ROC | 0.7566 | 0.7823 |
-| Gini Coefficient | 0.5131 | 0.5646 |
-| KS Statistic | 0.3842 | 0.4273 |
+| AUC-ROC | 0.7638 | 0.8316 |
+| Gini Coefficient | 0.5276 | 0.6632 |
+| KS Statistic | 0.3986 | 0.5137 |
 | PSI (train-test) | 0.0002 | 0.0002 |
 | Interpretability | High (coefficients) | Requires SHAP |
 
@@ -158,6 +158,7 @@ Performance was evaluated across demographic proxy segments:
 | 2026-02-28 | 1.0-rc1 | Initial model development. Champion (LR+WoE) and Challenger (XGBoost) trained on full 307K dataset. Baseline metrics established. |
 | 2026-02-28 | 1.0-rc2 | Added Optuna hyperparameter tuning for XGBoost. SHAP adverse action reasons added to API. Fairness audit across gender/age segments completed. |
 | 2026-02-28 | 1.0 | Production release. PSI monitoring deployed. Streamlit dashboard live. Docker images pushed to Docker Hub. API deployed on Render. |
+| 2026-03-01 | 2.0.0 | Added 13 bureau_balance features and 20+ derived features (EXT_SOURCE interactions, time-based features, credit ratios). Feature count increased from 199 to 232 columns (230 features). Champion upgraded with StandardScaler + L2 regularization tuning. Challenger upgraded with Optuna 15-trial hyperparameter tuning. Champion AUC 0.7566 -> 0.7638; Challenger AUC 0.7823 -> 0.8316. |
 
 ---
 
@@ -168,4 +169,4 @@ Performance was evaluated across demographic proxy segments:
 | Model developer | Eric Kimutai |
 | Model validator | Pending |
 | Business owner | Pending |
-| Last reviewed | 2026-02 |
+| Last reviewed | 2026-03 |
