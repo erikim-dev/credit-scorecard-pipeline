@@ -1,0 +1,42 @@
+# ── Data ──────────────────────────────────────────────────────
+data/raw/
+data/processed/
+*.csv
+*.zip
+
+# -- Models --------------------------------------------------------
+# Track model files (needed for Streamlit Cloud standalone deploy)
+# models/*.pkl
+
+# -- MLflow --------------------------------------------------------
+mlruns/
+mlflow.db
+*.db
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Jupyter ───────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Environment ──────────────────────────────────────────────
+.env
+.venv/
+venv/
+env/
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

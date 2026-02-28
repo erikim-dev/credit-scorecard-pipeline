@@ -1,0 +1,52 @@
+# Core data & ML
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.3
+scipy>=1.11
+
+# Gradient boosting
+xgboost>=2.0
+lightgbm>=4.0
+
+# Explainability
+shap>=0.43
+
+# Hyperparameter tuning
+optuna>=3.4
+
+# Experiment tracking
+mlflow>=2.9
+
+# Visualization
+matplotlib>=3.8
+seaborn>=0.13
+plotly>=5.18
+
+# SQL engine (local analytics)
+duckdb>=0.9
+
+# API & deployment
+fastapi>=0.104
+uvicorn>=0.24
+pydantic>=2.5
+
+# Dashboard & monitoring
+streamlit>=1.29
+evidently>=0.4
+
+# Data download
+kaggle>=1.6
+
+# Credit risk specific
+scorecardpy>=0.1.9
+optbinning>=0.19
+
+# Utilities
+joblib>=1.3
+tqdm>=4.66
+python-dotenv>=1.0
+
+# Testing
+pytest>=7.4
+pytest-cov>=4.1
+httpx>=0.25

@@ -1,0 +1,12 @@
+{
+  "scorecard_champion": {
+    "AUC": 0.7631,
+    "Gini": 0.5261,
+    "KS": 0.3947
+  },
+  "xgboost_challenger": {
+    "AUC": 0.8451,
+    "Gini": 0.6902,
+    "KS": 0.5298
+  }
+}

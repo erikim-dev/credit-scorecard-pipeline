@@ -1,0 +1,57 @@
+name: CI — Credit Risk Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -v --cov=src --cov-report=term-missing
+
+      - name: Verify API starts
+        run: |
+          # Start the API in the background
+          uvicorn api.main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+
+          # Check health endpoint
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health)
+          echo "Health endpoint returned: $STATUS"
+
+          if [ "$STATUS" -ne 200 ]; then
+            echo "API health check failed!"
+            exit 1
+          fi
+
+          echo "API started successfully"
+
+          # Kill the background process
+          kill %1 2>/dev/null || true
