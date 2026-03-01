@@ -1,12 +1,22 @@
 {
+  "lightgbm_challenger": {
+    "AUC": 0.8818,
+    "Gini": 0.7636,
+    "KS": 0.6198
+  },
   "scorecard_champion": {
-    "AUC": 0.7638,
-    "Gini": 0.5276,
-    "KS": 0.3986
+    "AUC": 0.7689,
+    "Gini": 0.5378,
+    "KS": 0.4044
+  },
+  "stacking_ensemble": {
+    "AUC": 0.854,
+    "Gini": 0.708,
+    "KS": 0.5527
   },
   "xgboost_challenger": {
-    "AUC": 0.8316,
-    "Gini": 0.6632,
-    "KS": 0.5137
+    "AUC": 0.843,
+    "Gini": 0.686,
+    "KS": 0.532
   }
 }

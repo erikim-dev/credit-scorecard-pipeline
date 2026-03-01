@@ -10,6 +10,7 @@ import argparse
 import pathlib
 
 import duckdb
+import numpy as np
 import pandas as pd
 
 
@@ -64,6 +65,12 @@ def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path):
     # ── Simple derived features ──────────────────────────────
     merged = add_derived_features(merged)
 
+    # ── Missing-value indicators ─────────────────────────────
+    merged = add_missing_indicators(merged)
+
+    # ── Target-encode high-cardinality categoricals ──────────
+    merged = target_encode_categoricals(merged, target_col="TARGET")
+
     # ── Save ─────────────────────────────────────────────────
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "train_features.csv"
@@ -72,6 +79,68 @@ def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path):
 
     con.close()
     return merged
+
+
+def add_missing_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create binary flags for key missing columns.
+
+    Missingness is often informative in credit data -- for example,
+    no bureau history means the applicant has no credit track record.
+    Also impute EXT_SOURCE columns with median (they are the strongest predictors).
+    """
+    # Key columns where missingness is a risk signal
+    indicator_cols = [
+        "EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3",
+        "AMT_GOODS_PRICE", "AMT_ANNUITY",
+        "OCCUPATION_TYPE", "CNT_FAM_MEMBERS",
+    ]
+    # Add aggregation-level missingness indicators
+    agg_prefixes = ["bureau_", "bb_", "cc_", "inst_", "pos_", "prev_"]
+    for prefix in agg_prefixes:
+        sample_col = next((c for c in df.columns if c.startswith(prefix)), None)
+        if sample_col:
+            indicator_cols.append(sample_col)
+
+    for col in indicator_cols:
+        if col in df.columns:
+            flag_name = f"MISS_{col}"
+            df[flag_name] = df[col].isnull().astype(int)
+
+    # Impute EXT_SOURCE with median (they drive ~22% of predictive power)
+    for col in ["EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3"]:
+        if col in df.columns:
+            median_val = df[col].median()
+            df[col] = df[col].fillna(median_val)
+
+    return df
+
+
+def target_encode_categoricals(
+    df: pd.DataFrame,
+    target_col: str = "TARGET",
+    min_samples: int = 100,
+    smoothing: float = 10.0,
+) -> pd.DataFrame:
+    """
+    Smoothed target encoding for categorical columns.
+
+    Uses Bayesian smoothing: encoded = (count * mean + smoothing * global_mean) / (count + smoothing)
+    This avoids overfitting on rare categories while preserving the risk signal.
+    """
+    global_mean = df[target_col].mean()
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+
+    for col in cat_cols:
+        stats = df.groupby(col, observed=True)[target_col].agg(["mean", "count"])
+        # Bayesian smoothing
+        smooth = (stats["count"] * stats["mean"] + smoothing * global_mean) / (stats["count"] + smoothing)
+        encoded_name = f"TE_{col}"
+        df[encoded_name] = df[col].map(smooth).astype(float)
+        # Fill missing with global mean
+        df[encoded_name] = df[encoded_name].fillna(global_mean)
+
+    return df
 
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:

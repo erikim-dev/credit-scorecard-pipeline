@@ -2,14 +2,14 @@
 
 ## Model Overview
 
-| Field | Champion (Scorecard) | Challenger (XGBoost) |
-|-------|---------------------|---------------------|
-| **Type** | Logistic Regression + WoE | Gradient Boosted Trees |
-| **Purpose** | Consumer credit default prediction | Consumer credit default prediction |
-| **Target** | Binary: 1 = default, 0 = non-default | Binary: 1 = default, 0 = non-default |
-| **Output** | Probability of default + credit score (300–850) | Probability of default + credit score (300–850) |
-| **Version** | 2.0 | 2.0 |
-| **Date** | 2026-03 | 2026-03 |
+| Field | Champion (Scorecard) | Challenger 1 (XGBoost) | Challenger 2 (LightGBM DART) | Stacking Ensemble |
+|-------|---------------------|---------------------|---------------------|---------------------|
+| **Type** | Logistic Regression + WoE | Gradient Boosted Trees | DART Boosted Trees | XGBoost + LightGBM + LR meta |
+| **Purpose** | Consumer credit default prediction | Consumer credit default prediction | Consumer credit default prediction | Consumer credit default prediction |
+| **Target** | Binary: 1 = default, 0 = non-default | Same | Same | Same |
+| **Output** | PD + credit score (300-850) | PD + credit score (300-850) | PD + credit score (300-850) | PD + credit score (300-850) |
+| **Version** | 2.1 | 2.1 | 2.1 | 2.1 |
+| **Date** | 2026-03 | 2026-03 | 2026-03 | 2026-03 |
 
 ---
 
@@ -28,7 +28,7 @@
 |--------|-------|
 | **Source** | Home Credit Default Risk (Kaggle competition) |
 | **Size** | 307,511 applications |
-| **Features** | 230 engineered features (122 original + 108 derived) from 8 relational tables |
+| **Features** | 259 engineered features (122 original + 137 derived) from 8 relational tables |
 | **Target distribution** | 8.07% default rate |
 | **Date range** | Historical (competition dataset) |
 | **Geography** | Emerging market consumer lending |
@@ -45,13 +45,15 @@
 
 ## Performance Metrics
 
-| Metric | Champion (Scorecard) | Challenger (XGBoost) |
-|--------|---------------------|---------------------|
-| AUC-ROC | 0.7638 | 0.8316 |
-| Gini Coefficient | 0.5276 | 0.6632 |
-| KS Statistic | 0.3986 | 0.5137 |
-| PSI (train-test) | 0.0002 | 0.0002 |
-| Interpretability | High (coefficients) | Requires SHAP |
+| Metric | Champion (Scorecard) | Challenger 1 (XGBoost) | Challenger 2 (LightGBM DART) | Stacking Ensemble |
+|--------|---------------------|---------------------|---------------------|---------------------|
+| AUC-ROC | 0.7689 | 0.8430 | **0.8818** | 0.8540 |
+| Gini Coefficient | 0.5378 | 0.6860 | **0.7636** | 0.7080 |
+| KS Statistic | 0.4044 | 0.5320 | **0.6198** | 0.5527 |
+| CV AUC (5-fold) | 0.7638 | 0.7867 | 0.7821 | 0.7873 |
+| Interpretability | High (coefficients) | Requires SHAP | Requires SHAP | Requires SHAP |
+
+*Hold-out metrics on 61,503-row test set (last 20%). CV metrics on full 307,511-row training set.*
 
 ### Evaluation Methodology
 - 80/20 stratified train/test split
@@ -159,6 +161,7 @@ Performance was evaluated across demographic proxy segments:
 | 2026-02-28 | 1.0-rc2 | Added Optuna hyperparameter tuning for XGBoost. SHAP adverse action reasons added to API. Fairness audit across gender/age segments completed. |
 | 2026-02-28 | 1.0 | Production release. PSI monitoring deployed. Streamlit dashboard live. Docker images pushed to Docker Hub. API deployed on Render. |
 | 2026-03-01 | 2.0.0 | Added 13 bureau_balance features and 20+ derived features (EXT_SOURCE interactions, time-based features, credit ratios). Feature count increased from 199 to 232 columns (230 features). Champion upgraded with StandardScaler + L2 regularization tuning. Challenger upgraded with Optuna 15-trial hyperparameter tuning. Champion AUC 0.7566 -> 0.7638; Challenger AUC 0.7823 -> 0.8316. |
+| 2026-03-01 | 2.1.0 | Added missing value indicators (11 binary flags), EXT_SOURCE median imputation, Bayesian smoothed target encoding for 16 categorical columns (259 total features). Added LightGBM DART challenger (AUC 0.8818) and XGBoost+LightGBM stacking ensemble (AUC 0.8540). LightGBM standard GBDT underperformed at 0.73 AUC — DART boosting resolved by applying dropout regularisation. |
 
 ---
 

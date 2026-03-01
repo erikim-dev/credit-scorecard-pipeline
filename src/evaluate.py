@@ -325,8 +325,9 @@ def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
     for pkl in sorted(models_dir.glob("*.pkl")):
         if "encoder" in pkl.stem or "scaler" in pkl.stem:
             continue
-        model = joblib.load(pkl)
+
         name = pkl.stem
+        artefact = joblib.load(pkl)
 
         feature_cols = [c for c in df_test.columns if c not in ("TARGET", "SK_ID_CURR", "SK_ID_PREV")]
         X = df_test[feature_cols].copy()
@@ -338,12 +339,25 @@ def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
             X = woe_encoder.transform(X[numeric_cols]).fillna(0)
             if scaler is not None:
                 X = pd.DataFrame(scaler.transform(X), columns=X.columns)
+            y_prob = artefact.predict_proba(X)[:, 1]
+
+        elif "stacking" in name and isinstance(artefact, dict):
+            # Stacking ensemble: run both base models, then meta-learner
+            cat_cols = X.select_dtypes(include=["object", "category"]).columns
+            for c in cat_cols:
+                X[c] = X[c].astype("category").cat.codes
+            xgb_prob = artefact["xgb_model"].predict_proba(X)[:, 1]
+            lgb_prob = artefact["lgb_model"].predict_proba(X)[:, 1]
+            meta_X = np.column_stack([xgb_prob, lgb_prob])
+            meta_X_s = artefact["meta_scaler"].transform(meta_X)
+            y_prob = artefact["meta_model"].predict_proba(meta_X_s)[:, 1]
+
         else:
             cat_cols = X.select_dtypes(include=["object", "category"]).columns
             for c in cat_cols:
                 X[c] = X[c].astype("category").cat.codes
+            y_prob = artefact.predict_proba(X)[:, 1]
 
-        y_prob = model.predict_proba(X)[:, 1]
         y_true = df_test["TARGET"]
 
         auc = roc_auc_score(y_true, y_prob)

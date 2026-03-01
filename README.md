@@ -4,7 +4,7 @@
 
 ---
 
-A production-grade credit risk modeling pipeline built by a credit risk analyst — not a Kaggle tutorial. Implements the full model development lifecycle used at banks: WoE binning with Information Value feature selection, traditional logistic scorecard (champion), XGBoost gradient-boosted challenger, SHAP explainability for ECOA adverse action compliance, fairness audit across demographic proxies, Population Stability Index monitoring, and a deployed scoring API with live Streamlit dashboard.
+A production-grade credit risk modeling pipeline built by a credit risk analyst — not a Kaggle tutorial. Implements the full model development lifecycle used at banks: WoE binning with Information Value feature selection, traditional logistic scorecard (champion), XGBoost gradient-boosted challenger, LightGBM DART challenger, XGBoost+LightGBM stacking ensemble, SHAP explainability for ECOA adverse action compliance, fairness audit across demographic proxies, Population Stability Index monitoring, and a deployed scoring API with live Streamlit dashboard.
 
 ---
 
@@ -15,29 +15,37 @@ graph LR
     subgraph Data Layer
         A[Kaggle: 8 CSV Tables] --> B[DuckDB SQL Aggregations]
         B --> C[Merged Feature Table]
+        C --> D[Missing Indicators + Target Encoding]
     end
 
     subgraph Modeling Layer
-        C --> D[WoE Binning + IV Selection]
-        D --> E[Champion: Logistic Scorecard]
-        C --> F[Challenger: XGBoost]
-        E --> G[MLflow Experiment Tracking]
-        F --> G
+        D --> E[WoE Binning + IV Selection]
+        E --> F[Champion: Logistic Scorecard]
+        D --> G[Challenger 1: XGBoost]
+        D --> H[Challenger 2: LightGBM DART]
+        G --> I[Stacking Ensemble]
+        H --> I
+        F --> J[MLflow Experiment Tracking]
+        G --> J
+        H --> J
+        I --> J
     end
 
     subgraph Evaluation Layer
-        E --> H[Model Comparison]
-        F --> H
-        H --> I[SHAP Explainability]
-        H --> J[Fairness Audit]
-        H --> K[PSI Monitoring]
+        F --> K[Model Comparison]
+        G --> K
+        H --> K
+        I --> K
+        K --> L[SHAP Explainability]
+        K --> M[Fairness Audit]
+        K --> N[PSI Monitoring]
     end
 
     subgraph Deployment Layer
-        F --> L[FastAPI Scoring API]
-        L --> M[Streamlit Dashboard]
-        L --> N[Docker Container]
-        N --> O[Render / Cloud]
+        G --> O[FastAPI Scoring API]
+        O --> P[Streamlit Dashboard]
+        O --> Q[Docker Container]
+        Q --> R[Render / Cloud]
     end
 ```
 
@@ -47,10 +55,14 @@ graph LR
 
 | Model | AUC | Gini | KS |
 |-------|-----|------|----|
-| Scorecard (Champion) | 0.7638 | 0.5276 | 0.3986 |
-| XGBoost (Challenger) | 0.8316 | 0.6632 | 0.5137 |
+| Scorecard (Champion) | 0.7689 | 0.5378 | 0.4044 |
+| XGBoost (Challenger 1) | 0.8430 | 0.6860 | 0.5320 |
+| LightGBM DART (Challenger 2) | **0.8818** | **0.7636** | **0.6198** |
+| Stacking (XGB + LGB) | 0.8540 | 0.7080 | 0.5527 |
 
-**Recommendation:** Deploy XGBoost as challenger on 20% of new applications alongside existing scorecard. 90-day parallel run before full cutover. Trigger review if PSI > 0.10 or Gini drops below 0.55.
+*Evaluated on 61,503-row hold-out test set (last 20% of training data). Default rate: 7.94%.*
+
+**Recommendation:** Deploy LightGBM DART as primary challenger on 20% of new applications alongside existing scorecard. XGBoost maintains production stability as secondary fallback. 90-day parallel run before full cutover. Trigger review if PSI > 0.10 or Gini drops below 0.55.
 
 ---
 
@@ -59,9 +71,10 @@ graph LR
 | Layer | Technology |
 |-------|-----------|
 | Data processing | DuckDB (SQL-first), pandas, NumPy |
-| Feature engineering | WoE encoding, Information Value, domain ratios |
+| Feature engineering | WoE encoding, Information Value, domain ratios, missing indicators, target encoding |
 | Champion model | Logistic Regression (scikit-learn) |
-| Challenger model | XGBoost with Optuna tuning |
+| Challenger models | XGBoost (Optuna-tuned), LightGBM DART (Optuna-tuned) |
+| Ensemble | Stacking: XGBoost + LightGBM base, LogisticRegression meta-learner |
 | Explainability | SHAP (TreeExplainer) |
 | Experiment tracking | MLflow → DagsHub (public dashboard) |
 | API | FastAPI + Pydantic + uvicorn |
@@ -98,8 +111,8 @@ credit-scorecard-project/
 ├── src/
 │   ├── woe_encoder.py              ← WoE/IV encoder with score mapping
 │   ├── feature_engineering.py       ← DuckDB-powered feature pipeline
-│   ├── train.py                     ← CLI training (scorecard + XGBoost)
-│   ├── evaluate.py                  ← Gini, KS, PSI, segmented AUC
+│   ├── train.py                     ← CLI training (scorecard + XGBoost + LightGBM + stacking)
+│   ├── evaluate.py                  ← Gini, KS, PSI, decile, expected loss, VIF
 │   └── predict.py                   ← Batch & single scoring
 ├── api/
 │   ├── main.py                     ← FastAPI (4 endpoints)
@@ -155,9 +168,13 @@ docker-compose up --build   # API on :8000, Streamlit on :8501
 
 3. **XGBoost with `scale_pos_weight`, not SMOTE** — SMOTE introduces synthetic observations that can distort credit risk calibration. Using `scale_pos_weight` adjusts the loss function without altering the data distribution, which is critical for score stability and PSI monitoring.
 
-4. **Champion/Challenger framework over single model** — Banks don't deploy one model. They run champion (interpretable, regulatory-safe) alongside challenger (higher performing, needs SHAP justification) on split traffic. This project implements that exact pattern.
+4. **Champion/Challenger framework over single model** — Banks don't deploy one model. They run champion (interpretable, regulatory-safe) alongside challenger (higher performing, needs SHAP justification) on split traffic. This project implements that exact pattern with two challengers and a stacking ensemble.
 
 5. **PSI thresholds are industry-standard** — The 0.10/0.25 PSI thresholds aren't arbitrary. They're the universally accepted values in credit risk model monitoring. Including them signals domain knowledge that no amount of Kaggle leaderboard climbing can replicate.
+
+6. **LightGBM DART over standard GBDT** — Standard LightGBM GBDT underperforms XGBoost on this dataset (AUC 0.73 vs 0.79) due to leaf-wise growth interacting poorly with the high proportion of NaN values (~16M NaN cells across 259 features). DART (Dropouts meet Multiple Additive Regression Trees) applies dropout regularisation across boosting iterations and recovers parity with XGBoost. Not a tuning trick — it's a fundamental algorithm choice supported by the data characteristics.
+
+7. **Missing value indicators as features** — Binary flags for whether EXT_SOURCE and key aggregation features are NaN. Missingness in credit bureau data is informative — applicants with no bureau record have a different risk profile than those with one. Median imputation on EXT_SOURCE fields (the strongest individual predictors) recovers signal that tree models otherwise discard in NaN-heavy branches.
 
 ---
 
