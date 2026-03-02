@@ -188,6 +188,62 @@ def load_comparison():
     return None
 
 
+def ensure_test_data_exists():
+    """Ensure test data exists; generate sample if missing (for Streamlit Cloud)."""
+    p = ROOT / "data" / "processed" / "train_features.csv"
+    
+    if p.exists():
+        return True
+    
+    print("[INFO] Generating sample test data for Streamlit Cloud...")
+    try:
+        # Create data directory if needed
+        p.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Generate synthetic data matching the expected schema
+        np.random.seed(42)
+        n_rows = 1000
+        
+        # Create base features
+        data = {
+            "SK_ID_CURR": np.arange(n_rows),
+            "TARGET": np.random.binomial(1, 0.08, n_rows),
+            "NAME_CONTRACT_TYPE": np.random.choice([1, 2], n_rows),
+            "CODE_GENDER": np.random.choice([1, 2], n_rows),
+            "FLAG_OWN_CAR": np.random.choice([0, 1], n_rows),
+        }
+        
+        # Add required numeric columns
+        required_cols = [
+            "DAYS_BIRTH", "AMT_INCOME_TOTAL", "AMT_CREDIT", "AMT_ANNUITY",
+            "AMT_GOODS_PRICE", "DAYS_EMPLOYED", "EXT_SOURCE_1", "EXT_SOURCE_2",
+            "EXT_SOURCE_3", "bureau_loan_count", "active_credits", "total_debt",
+            "overdue_count"
+        ]
+        
+        for col in required_cols:
+            if col.startswith("DAYS_"):
+                data[col] = np.random.randint(-25000, 0, n_rows)
+            elif col.startswith("AMT_"):
+                data[col] = np.random.exponential(50000, n_rows)
+            elif col.startswith("EXT_"):
+                data[col] = np.random.uniform(0, 1, n_rows)
+            else:
+                data[col] = np.random.poisson(2, n_rows)
+        
+        # Generate remaining 280 numeric features with random data
+        for i in range(280):
+            data[f"FEATURE_{i:03d}"] = np.random.randn(n_rows)
+        
+        df = pd.DataFrame(data)
+        df.to_csv(p, index=False)
+        print(f"[OK] Generated sample data: {len(df)} rows, {len(df.columns)} cols at {p}")
+        return True
+    except Exception as e:
+        print(f"[ERROR] Failed to generate sample data: {e}")
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
@@ -531,6 +587,9 @@ with st.sidebar:
         - **Fairness**: AUC consistency across demographic groups. Flag if AUC gap > 0.05.
         - **Calibration**: Predicted probabilities match observed default rates.
         """)
+
+# Ensure data exists (generate if needed for Streamlit Cloud)
+ensure_test_data_exists()
 
 # ===================================================================
 # PAGE: Scoring  (live-updating sliders, real-time gauge)
