@@ -45,7 +45,7 @@ st.set_page_config(
     page_title="Credit Risk Platform",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ---------------------------------------------------------------------------
@@ -97,6 +97,13 @@ st.markdown(f"""
     .pill-ok   {{ background: rgba(81,207,102,0.15); color: {C3}; }}
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
+
+    /* ensure sidebar control button is always visible */
+    section[data-testid="stSidebar"] > div:first-child {{
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }}
 
 </style>
 """, unsafe_allow_html=True)
