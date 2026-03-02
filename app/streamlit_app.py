@@ -214,11 +214,21 @@ def load_comparison():
 
 
 def ensure_test_data_exists():
-    """Ensure test data exists; generate sample if missing (for Streamlit Cloud)."""
+    """Ensure test data exists with correct schema; regenerate if wrong."""
     p = ROOT / "data" / "processed" / "train_features.csv"
 
+    # --- validate existing file ------------------------------------------
     if p.exists():
-        return True
+        try:
+            cols = pd.read_csv(p, nrows=0).columns.tolist()
+            # If generic placeholder columns present → bad file, regenerate
+            if any(c.startswith("FEATURE_0") for c in cols):
+                print("[INFO] Stale synthetic data detected, regenerating...")
+                p.unlink()
+            else:
+                return True
+        except Exception:
+            p.unlink(missing_ok=True)
 
     print("[INFO] Generating sample test data for Streamlit Cloud...")
     try:
@@ -1290,29 +1300,34 @@ elif page == "Model Analytics":
 
             tsplit = _tsplit
             Xh, yh = _Xh, _yh
-            yp = artefacts["xgb"].predict_proba(Xh)[:, 1]
+            try:
+                yp = artefacts["xgb"].predict_proba(Xh)[:, 1]
+            except Exception as fair_err:
+                st.error(f"Could not generate predictions for fairness analysis: {str(fair_err)[:120]}")
+                yp = None
 
-            fair = []
-            if "CODE_GENDER" in tsplit.columns:
-                for g in tsplit["CODE_GENDER"].unique():
-                    mask = tsplit["CODE_GENDER"] == g
-                    if mask.sum() > 50 and yh[mask].nunique() > 1:
-                        fair.append({"Group": "Gender", "Value": str(g),
-                                     "AUC": round(auc_fn(yh[mask], yp[mask.values]), 4),
-                                     "N": int(mask.sum())})
+            if yp is not None:
+                fair = []
+                if "CODE_GENDER" in tsplit.columns:
+                    for g in tsplit["CODE_GENDER"].unique():
+                        mask = tsplit["CODE_GENDER"] == g
+                        if mask.sum() > 50 and yh[mask].nunique() > 1:
+                            fair.append({"Group": "Gender", "Value": str(g),
+                                         "AUC": round(auc_fn(yh[mask], yp[mask.values]), 4),
+                                         "N": int(mask.sum())})
 
-            if "DAYS_BIRTH" in tsplit.columns:
-                ages = (-tsplit["DAYS_BIRTH"] / 365.25).astype(int)
-                bins = pd.cut(ages, bins=[18, 30, 40, 50, 60, 100],
-                              labels=["18-30", "31-40", "41-50", "51-60", "60+"])
-                for b in bins.dropna().unique():
-                    mask = bins == b
-                    if mask.sum() > 50 and yh[mask].nunique() > 1:
-                        fair.append({"Group": "Age", "Value": b,
-                                     "AUC": round(auc_fn(yh[mask], yp[mask.values]), 4),
-                                     "N": int(mask.sum())})
+                if "DAYS_BIRTH" in tsplit.columns:
+                    ages = (-tsplit["DAYS_BIRTH"] / 365.25).astype(int)
+                    bins = pd.cut(ages, bins=[18, 30, 40, 50, 60, 100],
+                                  labels=["18-30", "31-40", "41-50", "51-60", "60+"])
+                    for b in bins.dropna().unique():
+                        mask = bins == b
+                        if mask.sum() > 50 and yh[mask].nunique() > 1:
+                            fair.append({"Group": "Age", "Value": b,
+                                         "AUC": round(auc_fn(yh[mask], yp[mask.values]), 4),
+                                         "N": int(mask.sum())})
 
-            if fair:
+            if yp is not None and fair:
                 fdf = pd.DataFrame(fair)
                 st.dataframe(fdf, use_container_width=True, hide_index=True)
 
