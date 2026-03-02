@@ -140,51 +140,76 @@ def load_models():
     return art
 
 
-def load_test_data():
-    """Load test/training data for model evaluation.
-    
-    Note: No caching to ensure fresh data loads on every page refresh.
-    """
-    # Try multiple path resolution strategies
-    possible_paths = [
+def _resolve_data_path():
+    """Find the data CSV across possible path resolutions."""
+    for p in [
+        ROOT / "data" / "processed" / "train_features.csv",
         pathlib.Path(__file__).resolve().parent.parent / "data" / "processed" / "train_features.csv",
         pathlib.Path("data") / "processed" / "train_features.csv",
-        pathlib.Path(".") / "data" / "processed" / "train_features.csv",
-        ROOT / "data" / "processed" / "train_features.csv",
-    ]
-    
-    for p in possible_paths:
-        try:
-            if p.exists():
-                df = pd.read_csv(p)
-                # Verify TARGET column exists
-                if "TARGET" not in df.columns:
-                    continue
-                print(f"[OK] Loaded test data from {p}: {len(df)} rows, {len(df.columns)} cols")
-                return df
-        except Exception as e:
-            continue
-    
-    # Log all paths that were checked
-    print(f"[ERROR] Test data not found. Checked {len(possible_paths)} paths")
+    ]:
+        if p.exists():
+            return p
     return None
 
 
+@st.cache_data(show_spinner="Loading data...")
+def load_test_data():
+    """Load full dataset (cached). Used by Data Explorer."""
+    p = _resolve_data_path()
+    if p is None:
+        return None
+    try:
+        df = pd.read_csv(p)
+        if "TARGET" not in df.columns:
+            return None
+        print(f"[OK] Full data: {len(df):,} rows from {p}")
+        return df
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return None
 
 
-def load_comparison():
-    """Load model comparison metrics.
-    
-    Note: No caching to ensure fresh metrics on every refresh.
+@st.cache_data(show_spinner="Preparing analytics sample...")
+def load_analytics_sample(n: int = 20_000):
+    """Load a stratified sample for analytics (ROC, distributions, fairness).
+
+    Keeps the same default rate as the full dataset while using
+    far less memory and CPU on Streamlit Cloud.
     """
-    p = ROOT / "reports" / "model_comparison.json"
-    if p.exists():
-        try:
-            with open(p) as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[ERROR] Failed to load comparison data: {e}")
-    print(f"[ERROR] Model comparison file not found: {p}")
+    p = _resolve_data_path()
+    if p is None:
+        return None
+    try:
+        df = pd.read_csv(p)
+        if "TARGET" not in df.columns:
+            return None
+        if len(df) <= n:
+            return df
+        # Stratified sample to preserve class ratio
+        from sklearn.model_selection import train_test_split
+        sample, _ = train_test_split(
+            df, train_size=n, random_state=42, stratify=df["TARGET"],
+        )
+        print(f"[OK] Analytics sample: {len(sample):,} / {len(df):,} rows")
+        return sample.reset_index(drop=True)
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        return None
+
+
+@st.cache_data(show_spinner=False)
+def load_comparison():
+    """Load model comparison metrics (cached)."""
+    for p in [
+        ROOT / "reports" / "model_comparison.json",
+        pathlib.Path(__file__).resolve().parent.parent / "reports" / "model_comparison.json",
+    ]:
+        if p.exists():
+            try:
+                with open(p) as f:
+                    return json.load(f)
+            except Exception:
+                continue
     return None
 
 
@@ -903,7 +928,7 @@ elif page == "Model Analytics":
 
     # Load all required data
     comparison = load_comparison()
-    test_df = load_test_data()
+    test_df = load_analytics_sample()   # 20K stratified sample — fast & sufficient
     artefacts = load_models()
 
     tab_perf, tab_roc, tab_dist, tab_stability, tab_fairness = st.tabs([
@@ -1450,46 +1475,11 @@ elif page == "Data Explorer":
             else:
                 st.warning("No numeric features found in dataset.")
     else:
-        st.error("Data Load Failed")
-        
-        # Debug information
-        with st.expander("Debug Info"):
-            st.write(f"**Current working directory:** {pathlib.Path.cwd()}")
-            st.write(f"**Attempting to load from:**")
-            st.write(f"- `{ROOT / 'data' / 'processed' / 'train_features.csv'}`")
-            st.write(f"- `{pathlib.Path('data') / 'processed' / 'train_features.csv'}`")
-            st.write(f"- `{pathlib.Path('.') / 'data' / 'processed' / 'train_features.csv'}`")
-            
-            # Check what exists
-            st.write("**Checked locations:**")
-            for p in [ROOT / "data" / "processed" / "train_features.csv",
-                      pathlib.Path("data") / "processed" / "train_features.csv",
-                      pathlib.Path(".") / "data" / "processed" / "train_features.csv"]:
-                exists = p.exists()
-                st.write(f"- {p}: {'✓ Found' if exists else '✗ Not found'}")
-        
-        st.markdown("""
-**Data file not found or unable to load**
-
-The app expects training data at: `data/processed/train_features.csv`
-
-**To fix this:**
-
-1. Generate the training data by running:
-   ```bash
-   python src/feature_engineering.py --data data/raw
-   ```
-
-2. Or execute the notebook: `notebooks/03_feature_engineering.ipynb`
-   - Open in Jupyter
-   - Run all cells to generate the CSV file
-
-3. Once complete, **refresh this page** in Streamlit
-
-**Alternatively**, if the file exists locally but isn't loading, try:
-- Clearing Streamlit cache: `streamlit run app/streamlit_app.py --logger.level=debug`
-- Checking file permissions on `data/processed/train_features.csv`
-""")
+        st.warning("Data not available. Sample data will be generated automatically on next reload.")
+        # Trigger generation now
+        if ensure_test_data_exists():
+            st.info("Sample data generated. Click the button below to reload.")
+            st.button("Reload page", on_click=st.cache_data.clear)
 
 
 # ---------------------------------------------------------------------------
