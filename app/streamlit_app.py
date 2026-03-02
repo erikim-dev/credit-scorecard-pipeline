@@ -98,8 +98,8 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
-    /* mobile menu button - show on mobile */
-    .mobile-menu-btn {{
+    /* toggle arrows button */
+    .toggle-arrows {{
         display: none;
         position: fixed;
         top: 12px;
@@ -109,14 +109,16 @@ st.markdown(f"""
         color: #0b1020;
         border: none;
         border-radius: 8px;
-        padding: 8px 10px;
-        font-size: 18px;
+        padding: 6px 8px;
+        font-size: 20px;
         cursor: pointer;
         font-weight: 700;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
         transition: background 0.2s ease;
+        min-width: 32px;
+        text-align: center;
     }}
-    .mobile-menu-btn:hover {{
+    .toggle-arrows:hover {{
         background: {C5};
     }}
 
@@ -137,7 +139,7 @@ st.markdown(f"""
 
     /* hide sidebar on mobile by default */
     @media (max-width: 768px) {{
-        .mobile-menu-btn {{
+        .toggle-arrows {{
             display: block;
         }}
         section[data-testid="stSidebar"] {{
@@ -159,34 +161,36 @@ st.markdown(f"""
 
 </style>
 
-<button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+<button class="toggle-arrows" id="toggle-arrows">&gt;&gt;</button>
 <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
 <script>
 (function(){{
-  const menuBtn = document.getElementById('mobile-menu-btn');
+  const toggleBtn = document.getElementById('toggle-arrows');
   const overlay = document.getElementById('sidebar-overlay');
   const sidebar = document.querySelector('[data-testid="stSidebar"]');
 
-  if (!menuBtn || !sidebar || !overlay) return;
+  if (!toggleBtn || !sidebar || !overlay) return;
 
-  function isMobile() {{
-    return window.innerWidth <= 768;
+  function updateArrows() {{
+    toggleBtn.textContent = sidebar.classList.contains('sidebar-open') ? '<<' : '>>';
   }}
 
   function openSidebar() {{
-    if (isMobile()) {{
+    if (window.innerWidth <= 768) {{
       sidebar.classList.add('sidebar-open');
       overlay.classList.add('show');
+      updateArrows();
     }}
   }}
 
   function closeSidebar() {{
     sidebar.classList.remove('sidebar-open');
     overlay.classList.remove('show');
+    updateArrows();
   }}
 
-  menuBtn.addEventListener('click', function(e) {{
+  toggleBtn.addEventListener('click', function(e) {{
     e.stopPropagation();
     if (sidebar.classList.contains('sidebar-open')) {{
       closeSidebar();
@@ -201,7 +205,7 @@ st.markdown(f"""
   const navLinks = sidebar.querySelectorAll('[role="radio"]');
   navLinks.forEach(link => {{
     link.addEventListener('click', function() {{
-      setTimeout(closeSidebar, 100);
+      setTimeout(closeSidebar, 200);
     }});
   }});
 
@@ -211,6 +215,8 @@ st.markdown(f"""
       closeSidebar();
     }}
   }});
+  
+  updateArrows();
 }})();
 </script>
 """, unsafe_allow_html=True)
