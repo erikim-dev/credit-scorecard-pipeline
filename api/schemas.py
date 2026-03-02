@@ -2,6 +2,8 @@
 Pydantic schemas for the Credit Risk Scoring API.
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
@@ -9,10 +11,10 @@ class ApplicationInput(BaseModel):
     """Input schema — mirrors key features from the application table."""
 
     age: int = Field(..., ge=18, le=100, description="Applicant age in years")
-    income: float = Field(..., gt=0, description="Annual income")
-    loan_amount: float = Field(..., gt=0, description="Requested loan amount")
-    annuity: float = Field(..., gt=0, description="Monthly annuity payment")
-    goods_price: float = Field(0, ge=0, description="Price of goods for consumer loans")
+    income: float = Field(..., gt=0, le=1e9, description="Annual income")
+    loan_amount: float = Field(..., gt=0, le=1e9, description="Requested loan amount")
+    annuity: float = Field(..., gt=0, le=1e8, description="Monthly annuity payment")
+    goods_price: float = Field(0, ge=0, le=1e9, description="Price of goods for consumer loans")
 
     employment_years: float = Field(0, ge=0, description="Years of employment")
     education_type: str = Field("Secondary", description="Education level")
@@ -21,12 +23,12 @@ class ApplicationInput(BaseModel):
 
     bureau_loan_count: int = Field(0, ge=0, description="Number of bureau credit lines")
     active_credits: int = Field(0, ge=0, description="Currently active credit lines")
-    total_debt: float = Field(0, ge=0, description="Total outstanding debt from bureau")
+    total_debt: float = Field(0, ge=0, le=1e9, description="Total outstanding debt from bureau")
     overdue_count: int = Field(0, ge=0, description="Number of overdue bureau credits")
 
-    ext_source_1: float = Field(None, description="External data source score 1")
-    ext_source_2: float = Field(None, description="External data source score 2")
-    ext_source_3: float = Field(None, description="External data source score 3")
+    ext_source_1: float | None = Field(None, ge=0, le=1, description="External data source score 1 (0–1)")
+    ext_source_2: float | None = Field(None, ge=0, le=1, description="External data source score 2 (0–1)")
+    ext_source_3: float | None = Field(None, ge=0, le=1, description="External data source score 3 (0–1)")
 
 
 class ScoringResult(BaseModel):

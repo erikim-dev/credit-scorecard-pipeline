@@ -6,6 +6,8 @@ Usage:
     python src/feature_engineering.py --input data/raw --output data/processed
 """
 
+from __future__ import annotations
+
 import argparse
 import pathlib
 
@@ -15,6 +17,7 @@ import pandas as pd
 
 
 SQL_DIR = pathlib.Path(__file__).resolve().parent.parent / "sql"
+_EPS = 1  # Avoid division by zero in ratio features
 
 
 def run_sql_file(con: duckdb.DuckDBPyConnection, path: pathlib.Path) -> pd.DataFrame:
@@ -32,12 +35,12 @@ def load_tables(con: duckdb.DuckDBPyConnection, raw_dir: pathlib.Path):
             continue
         con.execute(
             f"CREATE OR REPLACE TABLE {table_name} AS "
-            f"SELECT * FROM read_csv_auto('{csv_path}', header=true)"
+            f"SELECT * FROM read_csv_auto('{csv_path.as_posix()}', header=true)"
         )
         print(f"  Loaded {table_name} ({con.execute(f'SELECT COUNT(*) FROM {table_name}').fetchone()[0]:,} rows)")
 
 
-def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path):
+def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path) -> pd.DataFrame:
     """Main pipeline: load CSVs → run SQL aggregations → merge → save."""
     con = duckdb.connect()
 
@@ -126,8 +129,6 @@ def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path):
 
 
 def add_missing_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create binary flags for key missing columns.
 
     Missingness is often informative in credit data -- for example,
     no bureau history means the applicant has no credit track record.
@@ -160,45 +161,18 @@ def add_missing_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def target_encode_categoricals(
-    df: pd.DataFrame,
-    target_col: str = "TARGET",
-    min_samples: int = 100,
-    smoothing: float = 10.0,
-) -> pd.DataFrame:
-    """
-    Smoothed target encoding for categorical columns.
-
-    Uses Bayesian smoothing: encoded = (count * mean + smoothing * global_mean) / (count + smoothing)
-    This avoids overfitting on rare categories while preserving the risk signal.
-    """
-    global_mean = df[target_col].mean()
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-
-    for col in cat_cols:
-        stats = df.groupby(col, observed=True)[target_col].agg(["mean", "count"])
-        # Bayesian smoothing
-        smooth = (stats["count"] * stats["mean"] + smoothing * global_mean) / (stats["count"] + smoothing)
-        encoded_name = f"TE_{col}"
-        df[encoded_name] = df[col].map(smooth).astype(float)
-        # Fill missing with global mean
-        df[encoded_name] = df[encoded_name].fillna(global_mean)
-
-    return df
-
-
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     """Add domain-driven ratios, interactions, and flags."""
 
     # ── Basic ratios ─────────────────────────────────────────
-    df["LOAN_INCOME_RATIO"] = df["AMT_CREDIT"] / (df["AMT_INCOME_TOTAL"] + 1)
-    df["ANNUITY_INCOME_RATIO"] = df["AMT_ANNUITY"] / (df["AMT_INCOME_TOTAL"] + 1)
-    df["CREDIT_GOODS_RATIO"] = df["AMT_CREDIT"] / (df["AMT_GOODS_PRICE"] + 1)
+    df["LOAN_INCOME_RATIO"] = df["AMT_CREDIT"] / (df["AMT_INCOME_TOTAL"] + _EPS)
+    df["ANNUITY_INCOME_RATIO"] = df["AMT_ANNUITY"] / (df["AMT_INCOME_TOTAL"] + _EPS)
+    df["CREDIT_GOODS_RATIO"] = df["AMT_CREDIT"] / (df["AMT_GOODS_PRICE"] + _EPS)
 
     # Credit term in months (higher = longer exposure)
-    df["CREDIT_TERM"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + 1)
+    df["CREDIT_TERM"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + _EPS)
     # Goods-to-income ratio
-    df["GOODS_INCOME_RATIO"] = df["AMT_GOODS_PRICE"] / (df["AMT_INCOME_TOTAL"] + 1)
+    df["GOODS_INCOME_RATIO"] = df["AMT_GOODS_PRICE"] / (df["AMT_INCOME_TOTAL"] + _EPS)
     # Income per family member
     cnt_fam = df.get("CNT_FAM_MEMBERS", df.get("CNT_CHILDREN", pd.Series(0, index=df.index)) + 1)
     df["INCOME_PER_PERSON"] = df["AMT_INCOME_TOTAL"] / (cnt_fam.clip(lower=1))
@@ -271,9 +245,9 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         df["BUREAU_ENQUIRY_TOTAL"] = df[bureau_req_cols].sum(axis=1)
 
     # ── Annuity / credit capacity ────────────────────────────
-    df["PAYMENT_RATE"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + 1)
+    df["PAYMENT_RATE"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + _EPS)
     # How much of credit goes beyond goods price (fees/interest proxy)
-    df["CREDIT_OVERCHARGE"] = (df["AMT_CREDIT"] - df["AMT_GOODS_PRICE"]) / (df["AMT_GOODS_PRICE"] + 1)
+    df["CREDIT_OVERCHARGE"] = (df["AMT_CREDIT"] - df["AMT_GOODS_PRICE"]) / (df["AMT_GOODS_PRICE"] + _EPS)
 
     # ── Income-loan cross features ───────────────────────────
     df["ANNUITY_x_EMPLOYMENT"] = df["AMT_ANNUITY"] * df.get("EMPLOYMENT_YEARS", 0)

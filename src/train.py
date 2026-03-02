@@ -14,26 +14,30 @@ Usage:
     python src/train.py --model stacking --data data/processed
 """
 
+from __future__ import annotations
+
 import argparse
-import pathlib
 import json
+import pathlib
+import sys
 import warnings
 
 import joblib
+import lightgbm as lgb
 import mlflow
 import numpy as np
-import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.metrics import roc_auc_score
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
-import xgboost as xgb
-import lightgbm as lgb
 import optuna
+import pandas as pd
+import xgboost as xgb
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import StandardScaler
 
-from woe_encoder import WoEEncoder
-from evaluate import compute_ks_statistic, compute_gini
+# Ensure src/ is importable regardless of CWD
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from evaluate import compute_gini, compute_ks_statistic  # noqa: E402
+from woe_encoder import WoEEncoder  # noqa: E402
 
 warnings.filterwarnings("ignore", category=UserWarning)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -44,7 +48,7 @@ MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
 
 
 # ── Data loading ──────────────────────────────────────────────
-def load_data(data_dir: pathlib.Path):
+def load_data(data_dir: pathlib.Path) -> tuple[pd.DataFrame, pd.Series]:
     df = pd.read_csv(data_dir / "train_features.csv")
     target = "TARGET"
     feature_cols = [
@@ -66,7 +70,7 @@ def select_features_by_iv(encoder: WoEEncoder, iv_floor: float = 0.02) -> list[s
 
 
 # ── Champion: Logistic Scorecard ─────────────────────────────
-def train_scorecard(X: pd.DataFrame, y: pd.Series):
+def train_scorecard(X: pd.DataFrame, y: pd.Series) -> dict:
     mlflow.set_experiment("credit_risk_champion")
 
     with mlflow.start_run(run_name="scorecard_v2"):
@@ -98,7 +102,7 @@ def train_scorecard(X: pd.DataFrame, y: pd.Series):
                 X_val_s = scaler.transform(X_val_woe)
 
                 mdl = LogisticRegression(
-                    C=c_val, l1_ratio=0, class_weight="balanced",
+                    C=c_val, penalty="l2", class_weight="balanced",
                     max_iter=1000, solver="lbfgs", random_state=RANDOM_STATE,
                 )
                 mdl.fit(X_tr_s, y_tr)
@@ -127,7 +131,7 @@ def train_scorecard(X: pd.DataFrame, y: pd.Series):
             X_val_s = scaler.transform(X_val_woe)
 
             model = LogisticRegression(
-                C=best_c, l1_ratio=0, class_weight="balanced",
+                C=best_c, penalty="l2", class_weight="balanced",
                 max_iter=1000, solver="lbfgs", random_state=RANDOM_STATE,
             )
             model.fit(X_tr_s, y_tr)
@@ -147,7 +151,7 @@ def train_scorecard(X: pd.DataFrame, y: pd.Series):
         X_scaled_full = scaler_full.fit_transform(X_woe_full)
 
         final_model = LogisticRegression(
-            C=best_c, l1_ratio=0, class_weight="balanced",
+            C=best_c, penalty="l2", class_weight="balanced",
             max_iter=1000, solver="lbfgs", random_state=RANDOM_STATE,
         )
         final_model.fit(X_scaled_full, y)
@@ -180,7 +184,7 @@ def train_scorecard(X: pd.DataFrame, y: pd.Series):
 
 
 # ── Challenger: XGBoost with Optuna tuning ───────────────────
-def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
+def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30) -> xgb.XGBClassifier:
     mlflow.set_experiment("credit_risk_challenger")
 
     X_encoded = X.copy()
@@ -207,7 +211,7 @@ def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
         }
         fold_aucs = []
         for train_idx, val_idx in skf.split(X_encoded, y):
-            mdl = xgb.XGBClassifier(**p, early_stopping_rounds=50)
+            mdl = xgb.XGBClassifier(**p)
             mdl.fit(
                 X_encoded.iloc[train_idx], y.iloc[train_idx],
                 eval_set=[(X_encoded.iloc[val_idx], y.iloc[val_idx])],
@@ -238,7 +242,7 @@ def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
         # Final CV with best params for clean metrics
         cv_results = []
         for fold, (train_idx, val_idx) in enumerate(skf.split(X_encoded, y)):
-            model = xgb.XGBClassifier(**best_params, early_stopping_rounds=50)
+            model = xgb.XGBClassifier(**best_params)
             model.fit(
                 X_encoded.iloc[train_idx], y.iloc[train_idx],
                 eval_set=[(X_encoded.iloc[val_idx], y.iloc[val_idx])],
@@ -269,7 +273,7 @@ def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
 
 
 # ── Challenger 2: LightGBM with Optuna tuning ───────────────
-def train_lightgbm(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
+def train_lightgbm(X: pd.DataFrame, y: pd.Series, n_trials: int = 30) -> lgb.LGBMClassifier:
     """
     LightGBM with DART boosting, tuned via Optuna.
     """
@@ -359,7 +363,7 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
 
 
 # ── Stacking Ensemble ────────────────────────────────────────
-def train_stacking(X: pd.DataFrame, y: pd.Series):
+def train_stacking(X: pd.DataFrame, y: pd.Series) -> dict:
     """
     Stacking ensemble: XGBoost + LightGBM base learners,
     logistic regression meta-learner.
@@ -420,9 +424,10 @@ def train_stacking(X: pd.DataFrame, y: pd.Series):
             y_val = y.iloc[val_idx]
 
             # XGBoost base
-            xgb_es_params = {**xgb_params, "early_stopping_rounds": 50}
-            xgb_model = xgb.XGBClassifier(**xgb_es_params)
-            xgb_model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)
+            xgb_model = xgb.XGBClassifier(**xgb_params)
+            xgb_model.fit(
+                X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False,
+            )
             oof_xgb[val_idx] = xgb_model.predict_proba(X_val)[:, 1]
 
             # LightGBM base (DART — no early stopping)

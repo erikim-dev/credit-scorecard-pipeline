@@ -1,11 +1,11 @@
 """
-Evaluation utilities -- credit-risk-specific metrics.
+Evaluation utilities — credit-risk-specific metrics.
 
 Includes:
     - AUC, Gini, KS
     - PSI (Population Stability Index)
     - Decile analysis with gains and lift tables
-    - Expected Loss (EL = PD x LGD x EAD)
+    - Expected Loss (EL = PD × LGD × EAD)
     - VIF (Variance Inflation Factor)
     - Segmented performance
     - ROC comparison plots
@@ -14,18 +14,17 @@ Usage:
     python src/evaluate.py --models models/ --data data/processed
 """
 
+from __future__ import annotations
+
 import argparse
-import pathlib
 import json
+import pathlib
 
 import joblib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import (
-    roc_auc_score, roc_curve, classification_report, confusion_matrix,
-    precision_recall_curve, average_precision_score,
-)
+from sklearn.metrics import roc_auc_score, roc_curve
 
 
 # ── Core Metrics ──────────────────────────────────────────────
@@ -44,15 +43,21 @@ def compute_ks_statistic(y_true, y_prob) -> float:
     return float(np.max(tpr - fpr))
 
 
-def compute_psi(expected, actual, bins: int = 10) -> dict:
+def compute_psi(
+    expected: np.ndarray,
+    actual: np.ndarray,
+    bins: int = 10,
+) -> dict:
     """
-    Population Stability Index.
+    Population Stability Index (data-driven breakpoints).
 
-    PSI < 0.10 → Stable
+    PSI < 0.10  → Stable
     PSI 0.10–0.25 → Moderate shift, investigate
-    PSI > 0.25 → Major shift, model review required
+    PSI > 0.25  → Major shift, model review required
     """
-    breakpoints = np.linspace(0, 1, bins + 1)
+    lo = min(np.min(expected), np.min(actual))
+    hi = max(np.max(expected), np.max(actual))
+    breakpoints = np.linspace(lo, hi, bins + 1)
     exp_perc = np.histogram(expected, bins=breakpoints)[0] / len(expected)
     act_perc = np.histogram(actual, bins=breakpoints)[0] / len(actual)
 
@@ -246,7 +251,10 @@ def segment_performance(
 
 # ── Plotting ─────────────────────────────────────────────────
 
-def plot_roc_comparison(models: dict[str, tuple], save_path: str | None = None):
+def plot_roc_comparison(
+    models: dict[str, tuple],
+    save_path: str | None = None,
+) -> plt.Figure:
     """
     Plot overlaid ROC curves for champion / challenger.
 
@@ -271,11 +279,14 @@ def plot_roc_comparison(models: dict[str, tuple], save_path: str | None = None):
         fig.savefig(save_path, dpi=150)
         print(f"  Saved ROC plot -> {save_path}")
     plt.close(fig)
+    return fig
 
 
 def plot_score_distribution(
-    scores: pd.Series, default: pd.Series, save_path: str | None = None
-):
+    scores: pd.Series,
+    default: pd.Series,
+    save_path: str | None = None,
+) -> plt.Figure:
     """Plot score distributions for goods vs bads."""
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.hist(scores[default == 0], bins=50, alpha=0.6, label="Good (non-default)", density=True)
@@ -288,11 +299,12 @@ def plot_score_distribution(
     if save_path:
         fig.savefig(save_path, dpi=150)
     plt.close(fig)
+    return fig
 
 
 # ── CLI ──────────────────────────────────────────────────────
 
-def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
+def main(models_dir: pathlib.Path, data_dir: pathlib.Path) -> None:
     reports_dir = pathlib.Path(__file__).resolve().parent.parent / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -317,9 +329,8 @@ def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
 
     selected_features = None
     if selected_path.exists():
-        import json as _json
         with open(selected_path) as f:
-            selected_features = _json.load(f)
+            selected_features = json.load(f)
 
     results = {}
     for pkl in sorted(models_dir.glob("*.pkl")):

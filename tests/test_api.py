@@ -136,6 +136,12 @@ class TestInputValidation:
         resp = client.post("/score", json=payload)
         assert resp.status_code == 422
 
+    def test_null_ext_sources_accepted(self):
+        """ext_source fields are optional — None should not crash."""
+        payload = {**VALID_PAYLOAD, "ext_source_1": None, "ext_source_2": None, "ext_source_3": None}
+        resp = client.post("/score", json=payload)
+        assert resp.status_code in (200, 503)  # 503 if model not loaded
+
 
 # ── Model Info Endpoint ──────────────────────────────────────
 

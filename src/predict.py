@@ -6,21 +6,27 @@ Usage:
     python src/predict.py --input data/processed/test_features.csv --output data/processed/predictions.csv
 """
 
+from __future__ import annotations
+
 import argparse
 import pathlib
+import sys
 
 import joblib
 import numpy as np
 import pandas as pd
-import shap
 
+# Ensure src/ is importable regardless of CWD
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 MODELS_DIR = pathlib.Path(__file__).resolve().parent.parent / "models"
 
 
-def load_model(model_name: str = "xgboost_challenger"):
+def load_model(model_name: str = "xgboost_challenger") -> object:
     """Load a pickled model from models/."""
     path = MODELS_DIR / f"{model_name}.pkl"
+    if not path.exists():
+        raise FileNotFoundError(f"Model not found: {path}")
     return joblib.load(path)
 
 
@@ -41,7 +47,8 @@ def score_batch(df: pd.DataFrame, model_name: str = "xgboost_challenger") -> pd.
     probs = model.predict_proba(X)[:, 1]
 
     # Convert to credit score (log-odds → points scale)
-    from woe_encoder import WoEEncoder
+    from woe_encoder import WoEEncoder  # noqa: E402 — lazy to avoid circular import
+
     log_odds = np.log(probs / (1 - probs + 1e-10))
     scores = [WoEEncoder.log_odds_to_score(lo) for lo in log_odds]
 
@@ -52,6 +59,7 @@ def score_batch(df: pd.DataFrame, model_name: str = "xgboost_challenger") -> pd.
         probs,
         bins=[0, 0.05, 0.15, 1.0],
         labels=["Low", "Medium", "High"],
+        include_lowest=True,
     )
     df["recommendation"] = df["risk_tier"].map({
         "Low": "Approve",
@@ -65,6 +73,8 @@ def explain_prediction(
     model, X_single: pd.DataFrame, n_top: int = 5
 ) -> list[dict]:
     """Return top SHAP factors for a single observation."""
+    import shap  # lazy import — heavy dependency only needed here
+
     explainer = shap.TreeExplainer(model)
     shap_vals = explainer.shap_values(X_single)
     if isinstance(shap_vals, list):

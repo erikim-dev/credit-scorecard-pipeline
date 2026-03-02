@@ -1,0 +1,39 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv*
+.env
+
+# IDE
+.vscode
+.idea
+
+# Data (large files — mount via volumes instead)
+data/raw/
+data/processed/
+
+# MLflow tracking (mount via volumes if needed)
+mlruns/
+
+# Notebooks & reports (not needed in API image)
+notebooks/
+reports/
+
+# Build artifacts
+*.egg-info
+dist/
+build/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

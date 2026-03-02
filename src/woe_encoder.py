@@ -8,9 +8,14 @@ Industry-standard approach used in credit risk modelling under
 Basel II/III regulatory frameworks.
 """
 
-import pandas as pd
+from __future__ import annotations
+
+import logging
+
 import numpy as np
-from typing import Optional
+import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 class WoEEncoder:
@@ -41,7 +46,7 @@ class WoEEncoder:
         self.bin_edges: dict = {}
 
     # ── Fit ───────────────────────────────────────────────────
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "WoEEncoder":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> WoEEncoder:
         """Compute WoE mapping and IV for every column in X."""
         for col in X.columns:
             if X[col].dtype in ("object", "category"):
@@ -50,8 +55,13 @@ class WoEEncoder:
                 self._fit_numeric(X[col], y, col)
         return self
 
-    def _fit_numeric(self, x: pd.Series, y: pd.Series, col: str):
-        df = pd.DataFrame({"x": x, "y": y}).dropna(subset=["x"])
+    def _fit_numeric(self, x: pd.Series, y: pd.Series, col: str) -> None:
+        mask = x.notna()
+        df = pd.DataFrame({"x": x[mask], "y": y[mask]})
+
+        if df.empty:
+            logger.warning("Column '%s' has no non-null values — skipped.", col)
+            return
 
         # Quantile binning (merge small buckets automatically)
         df["bin"], edges = pd.qcut(
@@ -60,12 +70,13 @@ class WoEEncoder:
         self.bin_edges[col] = edges
         self._compute_woe(df, col)
 
-    def _fit_categorical(self, x: pd.Series, y: pd.Series, col: str):
-        df = pd.DataFrame({"x": x, "y": y}).dropna(subset=["x"])
+    def _fit_categorical(self, x: pd.Series, y: pd.Series, col: str) -> None:
+        mask = x.notna()
+        df = pd.DataFrame({"x": x[mask], "y": y[mask]})
         df["bin"] = df["x"]
         self._compute_woe(df, col)
 
-    def _compute_woe(self, df: pd.DataFrame, col: str):
+    def _compute_woe(self, df: pd.DataFrame, col: str) -> None:
         stats = df.groupby("bin", observed=False)["y"].agg(events="sum", total="count")
         stats["non_events"] = stats["total"] - stats["events"]
 
@@ -173,6 +184,7 @@ class WoEEncoder:
         for i, feat in enumerate(feature_names):
             coef = model_coef[i]
             if feat not in self.woe_dict:
+                logger.warning("Feature '%s' not in woe_dict — skipped in scorecard.", feat)
                 continue
             for bin_label, woe_val in self.woe_dict[feat].items():
                 points = round(base_points_per_feat + factor * coef * woe_val, 1)

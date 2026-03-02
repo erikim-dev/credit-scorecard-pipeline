@@ -36,6 +36,9 @@ streamlit>=1.29
 # Statistics (VIF computation)
 statsmodels>=0.14
 
+# Monitoring & drift detection
+evidently>=0.4
+
 # Data download
 kaggle>=1.6
 

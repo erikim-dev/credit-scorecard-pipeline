@@ -8,6 +8,8 @@ Endpoints:
     POST /score/batch  → score multiple applications
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import pathlib
@@ -16,7 +18,6 @@ from contextlib import asynccontextmanager
 import joblib
 import numpy as np
 import pandas as pd
-import shap
 from fastapi import FastAPI, HTTPException
 
 # ── Paths ─────────────────────────────────────────────────────
@@ -40,9 +41,11 @@ model = None
 explainer = None
 
 
-def _load_artefacts():
+def _load_artefacts() -> None:
     global model, explainer
     if MODEL_PATH.exists():
+        import shap  # lazy — heavy dependency
+
         model = joblib.load(MODEL_PATH)
         explainer = shap.TreeExplainer(model)
     else:
@@ -92,6 +95,11 @@ def application_to_features(app_in: ApplicationInput) -> pd.DataFrame:
     all missing columns with 0 so the model gets exactly the
     features it was trained on.
     """
+    # Coalesce nullable external sources to median (0.5) for safety
+    ext1 = app_in.ext_source_1 if app_in.ext_source_1 is not None else 0.5
+    ext2 = app_in.ext_source_2 if app_in.ext_source_2 is not None else 0.5
+    ext3 = app_in.ext_source_3 if app_in.ext_source_3 is not None else 0.5
+
     data = {
         "AGE_YEARS": app_in.age,
         "AMT_INCOME_TOTAL": app_in.income,
@@ -103,17 +111,14 @@ def application_to_features(app_in: ApplicationInput) -> pd.DataFrame:
         "active_credits": app_in.active_credits,
         "total_debt": app_in.total_debt,
         "overdue_count": app_in.overdue_count,
-        "EXT_SOURCE_1": app_in.ext_source_1,
-        "EXT_SOURCE_2": app_in.ext_source_2,
-        "EXT_SOURCE_3": app_in.ext_source_3,
+        "EXT_SOURCE_1": ext1,
+        "EXT_SOURCE_2": ext2,
+        "EXT_SOURCE_3": ext3,
     }
 
     # Derived ratios
     income = app_in.income + 1
     goods = app_in.goods_price + 1 if app_in.goods_price > 0 else 1.0
-    ext1 = app_in.ext_source_1
-    ext2 = app_in.ext_source_2
-    ext3 = app_in.ext_source_3
     age = app_in.age
 
     data.update({

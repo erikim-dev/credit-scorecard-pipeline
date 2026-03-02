@@ -33,7 +33,15 @@ train-challenger:
 	$(PYTHON) src/train.py --model xgboost --data $(PROCESSED)
 	@echo "Challenger XGBoost trained"
 
-train: train-champion train-challenger
+train-lightgbm:
+	$(PYTHON) src/train.py --model lightgbm --data $(PROCESSED)
+	@echo "Challenger LightGBM trained"
+
+train-stacking:
+	$(PYTHON) src/train.py --model stacking --data $(PROCESSED)
+	@echo "Stacking ensemble trained"
+
+train: train-champion train-challenger train-lightgbm train-stacking
 
 # ─── Evaluate ─────────────────────────────────────────────────
 evaluate:
@@ -46,7 +54,7 @@ serve:
 
 # ─── Monitor ──────────────────────────────────────────────────
 monitor:
-	$(PYTHON) monitoring/psi_monitor.py --baseline $(PROCESSED)/train.csv --current $(PROCESSED)/latest.csv
+	$(PYTHON) monitoring/psi_monitor.py --baseline $(PROCESSED)/train_features.csv --current $(PROCESSED)/latest.csv
 
 # ─── Test ─────────────────────────────────────────────────────
 test:
