@@ -656,6 +656,22 @@ elif page == "Batch Processing":
 
     uploaded = st.file_uploader("Upload applicant CSV", type=["csv"], label_visibility="collapsed")
 
+    # Provide a downloadable sample CSV for users to try the batch upload
+    try:
+        sample_fp = ROOT / "data" / "sample_applicants.csv"
+        if sample_fp.exists():
+            with open(sample_fp, "rb") as _f:
+                sample_bytes = _f.read()
+            st.download_button(
+                "Download sample CSV",
+                data=sample_bytes,
+                file_name="sample_applicants.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+    except Exception:
+        pass
+
     if uploaded is not None:
         df = pd.read_csv(uploaded)
         st.markdown(f"**{len(df):,} rows** -- {len(df.columns)} columns")
