@@ -108,23 +108,23 @@ st.markdown(f"""
 
 <div id="reveal-sidebar">Show sidebar</div>
 <script>
-(function(){
-  const btn = document.getElementById('reveal-sidebar');
-  function toggleSidebar(){
-    const selectors = [
-      '[data-testid="collapsedControl"]',
-      'button[title="Open sidebar"]',
-      'button[aria-label="Open navigation"]',
-      'button[aria-label="Show sidebar"]'
-    ];
-    for(const s of selectors){
-      const el = document.querySelector(s);
-      if(el){ el.click(); return; }
-    }
-    try{ const p = window.parent.document.querySelector('[data-testid="collapsedControl"]'); p && p.click(); }catch(e){}
-  }
-  btn && btn.addEventListener('click', toggleSidebar);
-})();
+(function(){{
+    const btn = document.getElementById('reveal-sidebar');
+    function toggleSidebar(){{
+        const selectors = [
+            '[data-testid="collapsedControl"]',
+            'button[title="Open sidebar"]',
+            'button[aria-label="Open navigation"]',
+            'button[aria-label="Show sidebar"]'
+        ];
+        for(const s of selectors){{
+            const el = document.querySelector(s);
+            if(el){{ el.click(); return; }}
+        }}
+        try{{ const p = window.parent.document.querySelector('[data-testid="collapsedControl"]'); p && p.click(); }}catch(e){{}}
+    }}
+    btn && btn.addEventListener('click', toggleSidebar);
+}})();
 </script>
 """, unsafe_allow_html=True)
 
