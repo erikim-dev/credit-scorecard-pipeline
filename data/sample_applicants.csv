@@ -1,0 +1,4 @@
+age,income,loan_amount,annuity,goods_price,employment_years,bureau_loan_count,active_credits,total_debt,overdue_count,ext_source_1,ext_source_2,ext_source_3,education,family_status,housing
+30,120000,150000,10000,140000,5,1,1,20000,0,0.60,0.55,0.50,Higher education,Married,House / apartment
+45,50000,80000,5000,80000,10,3,2,40000,1,0.30,0.25,0.40,Secondary,Single,Rented apartment
+22,30000,20000,1500,20000,1,0,0,0,2,0.10,0.20,0.15,Incomplete higher,Single,With parents
