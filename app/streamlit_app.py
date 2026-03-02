@@ -107,48 +107,69 @@ st.markdown(f"""
 # ---------------------------------------------------------------------------
 @st.cache_resource(show_spinner=False)
 def load_models():
+    """Load all pre-trained models from models/ directory."""
     import joblib
     mdir = ROOT / "models"
     art = {}
-    for key, fn in {
+    
+    model_files = {
         "xgb": "xgboost_challenger.pkl",
         "lgb": "lightgbm_challenger.pkl",
         "scorecard": "scorecard_champion.pkl",
         "stacking": "stacking_ensemble.pkl",
         "woe_encoder": "woe_encoder.pkl",
         "scaler": "scaler.pkl",
-    }.items():
+    }
+    
+    for key, fn in model_files.items():
         p = mdir / fn
         if p.exists():
             try:
                 art[key] = joblib.load(p)
             except Exception as e:
-                pass
+                print(f"[ERROR] Failed to load {key} from {fn}: {e}")
+    
     fp = mdir / "selected_features.json"
     if fp.exists():
-        with open(fp) as f:
-            art["selected_features"] = json.load(f)
+        try:
+            with open(fp) as f:
+                art["selected_features"] = json.load(f)
+        except Exception as e:
+            print(f"[ERROR] Failed to load selected_features.json: {e}")
+    
     return art
 
 
 @st.cache_data(show_spinner=False)
 def load_test_data():
+    """Load test/training data for model evaluation."""
     p = ROOT / "data" / "processed" / "train_features.csv"
     if p.exists():
         try:
-            return pd.read_csv(p)
+            df = pd.read_csv(p)
+            # Verify TARGET column exists
+            if "TARGET" not in df.columns:
+                print(f"[ERROR] TARGET column not found in {p}")
+                return None
+            return df
         except Exception as e:
-            st.warning(f"Error loading data: {e}")
+            print(f"[ERROR] Failed to load test data from {p}: {e}")
             return None
+    print(f"[ERROR] Test data file not found: {p}")
     return None
 
 
 @st.cache_data(show_spinner=False)
 def load_comparison():
+    """Load model comparison metrics."""
     p = ROOT / "reports" / "model_comparison.json"
     if p.exists():
-        with open(p) as f:
-            return json.load(f)
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[ERROR] Failed to load comparison data: {e}")
+    print(f"[ERROR] Model comparison file not found: {p}")
     return None
 
 
@@ -806,9 +827,29 @@ elif page == "Model Analytics":
     st.title("Model Analytics")
     st.caption("Hold-out performance, ROC, stability, and fairness")
 
+    # Load all required data
     comparison = load_comparison()
     test_df = load_test_data()
     artefacts = load_models()
+    
+    # Status indicator
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if test_df is not None:
+            st.success(f"✓ Data: {len(test_df):,} rows")
+        else:
+            st.error("✗ Data not available")
+    with col2:
+        models_loaded = len([k for k in artefacts.keys() if k != "selected_features"])
+        if models_loaded > 0:
+            st.success(f"✓ Models: {models_loaded}/6 loaded")
+        else:
+            st.error("✗ No models available")
+    with col3:
+        if comparison is not None:
+            st.success(f"✓ Metrics available")
+        else:
+            st.error("✗ Metrics not available")
 
     tab_perf, tab_roc, tab_dist, tab_stability, tab_fairness = st.tabs([
         "Performance", "ROC Curves", "Distributions", "Stability", "Fairness",
@@ -833,64 +874,65 @@ elif page == "Model Analytics":
                         d = comparison[k]
                         rows.append({"Model": n, "AUC-ROC": d.get("AUC", 0),
                                      "Gini": d.get("Gini", 0), "KS Statistic": d.get("KS", 0)})
-                mdf = pd.DataFrame(rows)
+                mdf = pd.DataFrame(rows) if rows else None
 
-            num_cols = ["AUC-ROC", "Gini", "KS Statistic"]
-            st.dataframe(
-                mdf.style
-                    .highlight_max(subset=num_cols, color="#1a4d2e")
-                    .format({c: "{:.4f}" for c in num_cols}),
-                use_container_width=True, hide_index=True,
-            )
+            if mdf is not None and len(mdf) > 0:
+                num_cols = ["AUC-ROC", "Gini", "KS Statistic"]
+                st.dataframe(
+                    mdf.style
+                        .highlight_max(subset=num_cols, color="#1a4d2e")
+                        .format({c: "{:.4f}" for c in num_cols}),
+                    use_container_width=True, hide_index=True,
+                )
 
-            # grouped bar chart
-            fig = go.Figure()
-            for i, (_, row) in enumerate(mdf.iterrows()):
-                fig.add_trace(go.Bar(
-                    name=row["Model"],
-                    x=num_cols,
-                    y=[row[c] for c in num_cols],
-                    marker_color=PAL[i % len(PAL)],
-                ))
-            fig.update_layout(
-                template=T, barmode="group", yaxis_range=[0, 1],
-                yaxis_title="Score", height=400, margin=dict(t=30),
-                legend=dict(orientation="h", yanchor="top", y=1.12),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+                # grouped bar chart
+                fig = go.Figure()
+                for i, (_, row) in enumerate(mdf.iterrows()):
+                    fig.add_trace(go.Bar(
+                        name=row["Model"],
+                        x=num_cols,
+                        y=[row[c] for c in num_cols],
+                        marker_color=PAL[i % len(PAL)],
+                    ))
+                fig.update_layout(
+                    template=T, barmode="group", yaxis_range=[0, 1],
+                    yaxis_title="Score", height=400, margin=dict(t=30),
+                    legend=dict(orientation="h", yanchor="top", y=1.12),
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
-            # overfitting check
-            st.markdown("##### Overfitting Check")
-            cv_lu = {
-                "Champion (Scorecard)": 0.7659, "Scorecard (Champion)": 0.7659,
-                "XGBoost": 0.7886, "XGBoost (Challenger)": 0.7886,
-                "LightGBM DART": 0.7736,
-                "Stacking Ensemble": 0.7886, "Stacking": 0.7886,
-            }
-            ov = []
-            for _, row in mdf.iterrows():
-                cv = cv_lu.get(row["Model"], 0)
-                ho = row["AUC-ROC"]
-                if cv > 0:
-                    gap = ho - cv
-                    ov.append({
-                        "Model": row["Model"],
-                        "CV AUC": f"{cv:.4f}",
-                        "Hold-out AUC": f"{ho:.4f}",
-                        "Gap": f"{gap:+.4f}",
-                        "Status": "OK" if abs(gap) < 0.08 else "Check",
-                    })
-            if ov:
-                st.dataframe(pd.DataFrame(ov), use_container_width=True, hide_index=True)
-            
-            # Threshold exploration
-            st.markdown("##### Confusion Matrix at Different Thresholds")
-            if test_df is not None and "xgb" in artefacts:
-                from sklearn.model_selection import train_test_split
-                exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-                fc = [c for c in test_df.columns if c not in exclude]
-                X = test_df[fc]; y = test_df["TARGET"]
-                _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+                # overfitting check
+                st.markdown("##### Overfitting Check")
+                cv_lu = {
+                    "Champion (Scorecard)": 0.7659, "Scorecard (Champion)": 0.7659,
+                    "XGBoost": 0.7886, "XGBoost (Challenger)": 0.7886,
+                    "LightGBM DART": 0.7736,
+                    "Stacking Ensemble": 0.7886, "Stacking": 0.7886,
+                }
+                ov = []
+                for _, row in mdf.iterrows():
+                    cv = cv_lu.get(row["Model"], 0)
+                    ho = row["AUC-ROC"]
+                    if cv > 0:
+                        gap = ho - cv
+                        ov.append({
+                            "Model": row["Model"],
+                            "CV AUC": f"{cv:.4f}",
+                            "Hold-out AUC": f"{ho:.4f}",
+                            "Gap": f"{gap:+.4f}",
+                            "Status": "OK" if abs(gap) < 0.08 else "Check",
+                        })
+                if ov:
+                    st.dataframe(pd.DataFrame(ov), use_container_width=True, hide_index=True)
+                
+                # Threshold exploration
+                st.markdown("##### Confusion Matrix at Different Thresholds")
+                if test_df is not None and "xgb" in artefacts:
+                    from sklearn.model_selection import train_test_split
+                    exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
+                    fc = [c for c in test_df.columns if c not in exclude]
+                    X = test_df[fc]; y = test_df["TARGET"]
+                    _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
                 
                 if artefacts.get("xgb") is not None:
                     try:
@@ -910,10 +952,14 @@ elif page == "Model Analytics":
                                 "Specificity": f"{specificity:.2%}",
                             })
                         st.dataframe(pd.DataFrame(cm_data), use_container_width=True, hide_index=True)
-                    except Exception:
-                        st.caption("Confusion matrix not available.")
+                    except Exception as e:
+                        st.caption(f"Confusion matrix error: {str(e)[:50]}")
+                else:
+                    st.info("Test data or XGBoost model needed for threshold analysis.")
+            else:
+                st.warning("Model comparison data incomplete. Expected AUC, Gini, KS Statistic columns.")
         else:
-            st.info("No model comparison data found. Run evaluation first.")
+            st.error("Model comparison metrics not found at `reports/model_comparison.json`. Please run model evaluation first.")
 
     # -- tab: ROC ---------------------------------------------------------
     with tab_roc:
