@@ -122,7 +122,7 @@ def load_models():
         if p.exists():
             try:
                 art[key] = joblib.load(p)
-            except Exception:
+            except Exception as e:
                 pass
     fp = mdir / "selected_features.json"
     if fp.exists():
@@ -918,81 +918,95 @@ elif page == "Model Analytics":
     # -- tab: ROC ---------------------------------------------------------
     with tab_roc:
         st.markdown("<small>Model ROC curves and AUC scores on hold-out data. Higher is better.</small>", unsafe_allow_html=True)
-        if test_df is not None and artefacts:
-            from sklearn.metrics import roc_curve, roc_auc_score as auc_score
-            from sklearn.model_selection import train_test_split
+        if test_df is not None:
+            if not artefacts:
+                st.error("Models not found. Ensure all .pkl files are in the `models/` directory.")
+            else:
+                try:
+                    from sklearn.metrics import roc_curve, roc_auc_score as auc_score
+                    from sklearn.model_selection import train_test_split
 
-            exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-            fc = [c for c in test_df.columns if c not in exclude]
-            X = test_df[fc]; y = test_df["TARGET"]
-            _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+                    exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
+                    fc = [c for c in test_df.columns if c not in exclude]
+                    X = test_df[fc]; y = test_df["TARGET"]
+                    _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-            fig_roc = go.Figure()
-            cfgs = [
-                ("XGBoost", artefacts.get("xgb"), C1),
-                ("LightGBM DART", artefacts.get("lgb"), C3),
-            ]
-            for nm, mdl, clr in cfgs:
-                if mdl is not None:
-                    try:
-                        yp = mdl.predict_proba(Xh)[:, 1]
-                        fpr, tpr, _ = roc_curve(yh, yp)
-                        a = auc_score(yh, yp)
+                    fig_roc = go.Figure()
+                    curves_added = 0
+                    
+                    cfgs = [
+                        ("XGBoost", artefacts.get("xgb"), C1),
+                        ("LightGBM DART", artefacts.get("lgb"), C3),
+                    ]
+                    for nm, mdl, clr in cfgs:
+                        if mdl is not None:
+                            try:
+                                yp = mdl.predict_proba(Xh)[:, 1]
+                                fpr, tpr, _ = roc_curve(yh, yp)
+                                a = auc_score(yh, yp)
+                                fig_roc.add_trace(go.Scatter(
+                                    x=fpr, y=tpr, name=f"{nm} {a:.4f}",
+                                    line=dict(color=clr, width=2.5),
+                                ))
+                                curves_added += 1
+                            except Exception as e:
+                                st.caption(f"Could not generate ROC for {nm}: {str(e)[:50]}")
+
+                    if "stacking" in artefacts and isinstance(artefacts["stacking"], dict):
+                        try:
+                            s = artefacts["stacking"]
+                            xp = s["xgb_model"].predict_proba(Xh)[:, 1]
+                            lp = s["lgb_model"].predict_proba(Xh)[:, 1]
+                            mX = s["meta_scaler"].transform(np.column_stack([xp, lp]))
+                            yp = s["meta_model"].predict_proba(mX)[:, 1]
+                            fpr, tpr, _ = roc_curve(yh, yp)
+                            a = auc_score(yh, yp)
+                            fig_roc.add_trace(go.Scatter(
+                                x=fpr, y=tpr, name=f"Stacking {a:.4f}",
+                                line=dict(color=C4, width=2.5),
+                            ))
+                            curves_added += 1
+                        except Exception as e:
+                            st.caption(f"Could not generate ROC for Stacking: {str(e)[:50]}")
+
+                    if "scorecard" in artefacts and "woe_encoder" in artefacts:
+                        try:
+                            woe = artefacts["woe_encoder"]
+                            scl = artefacts.get("scaler")
+                            sel = artefacts.get("selected_features", [])
+                            Xsc = Xh[[c for c in sel if c in Xh.columns]]
+                            Xsc = woe.transform(Xsc).fillna(0)
+                            if scl is not None:
+                                Xsc = pd.DataFrame(scl.transform(Xsc), columns=Xsc.columns)
+                            yp = artefacts["scorecard"].predict_proba(Xsc)[:, 1]
+                            fpr, tpr, _ = roc_curve(yh, yp)
+                            a = auc_score(yh, yp)
+                            fig_roc.add_trace(go.Scatter(
+                                x=fpr, y=tpr, name=f"Scorecard {a:.4f}",
+                                line=dict(color=MUTED, width=2, dash="dot"),
+                            ))
+                            curves_added += 1
+                        except Exception as e:
+                            st.caption(f"Could not generate ROC for Scorecard: {str(e)[:50]}")
+
+                    if curves_added > 0:
                         fig_roc.add_trace(go.Scatter(
-                            x=fpr, y=tpr, name=f"{nm} {a:.4f}",
-                            line=dict(color=clr, width=2.5),
+                            x=[0, 1], y=[0, 1], name="Random",
+                            line=dict(color="#30363d", dash="dash", width=1),
                         ))
-                    except Exception:
-                        pass
-
-            if "stacking" in artefacts and isinstance(artefacts["stacking"], dict):
-                try:
-                    s = artefacts["stacking"]
-                    xp = s["xgb_model"].predict_proba(Xh)[:, 1]
-                    lp = s["lgb_model"].predict_proba(Xh)[:, 1]
-                    mX = s["meta_scaler"].transform(np.column_stack([xp, lp]))
-                    yp = s["meta_model"].predict_proba(mX)[:, 1]
-                    fpr, tpr, _ = roc_curve(yh, yp)
-                    a = auc_score(yh, yp)
-                    fig_roc.add_trace(go.Scatter(
-                        x=fpr, y=tpr, name=f"Stacking {a:.4f}",
-                        line=dict(color=C4, width=2.5),
-                    ))
-                except Exception:
-                    pass
-
-            if "scorecard" in artefacts and "woe_encoder" in artefacts:
-                try:
-                    woe = artefacts["woe_encoder"]
-                    scl = artefacts.get("scaler")
-                    sel = artefacts.get("selected_features", [])
-                    Xsc = Xh[[c for c in sel if c in Xh.columns]]
-                    Xsc = woe.transform(Xsc).fillna(0)
-                    if scl is not None:
-                        Xsc = pd.DataFrame(scl.transform(Xsc), columns=Xsc.columns)
-                    yp = artefacts["scorecard"].predict_proba(Xsc)[:, 1]
-                    fpr, tpr, _ = roc_curve(yh, yp)
-                    a = auc_score(yh, yp)
-                    fig_roc.add_trace(go.Scatter(
-                        x=fpr, y=tpr, name=f"Scorecard {a:.4f}",
-                        line=dict(color=MUTED, width=2, dash="dot"),
-                    ))
-                except Exception:
-                    pass
-
-            fig_roc.add_trace(go.Scatter(
-                x=[0, 1], y=[0, 1], name="Random",
-                line=dict(color="#30363d", dash="dash", width=1),
-            ))
-            fig_roc.update_layout(
-                template=T,
-                xaxis_title="False Positive Rate", yaxis_title="True Positive Rate",
-                height=520, margin=dict(t=30),
-                legend=dict(orientation="h", yanchor="top", y=1.12, font=dict(size=12)),
-            )
-            st.plotly_chart(fig_roc, use_container_width=True)
+                        fig_roc.update_layout(
+                            template=T,
+                            xaxis_title="False Positive Rate", yaxis_title="True Positive Rate",
+                            height=520, margin=dict(t=30),
+                            legend=dict(orientation="h", yanchor="top", y=1.12, font=dict(size=12)),
+                        )
+                        st.plotly_chart(fig_roc, use_container_width=True)
+                    else:
+                        st.error("No valid ROC curves could be generated. Check model compatibility with test data.")
+                except Exception as e:
+                    st.error(f"Error generating ROC curves: {str(e)}")
         else:
-            st.warning("Unable to load ROC curves. Please ensure test data and models are available in the project directory.")
+            st.warning("Test data not found. Ensure `data/processed/train_features.csv` exists.")
 
     # -- tab: Distributions -----------------------------------------------
     with tab_dist:
@@ -1083,7 +1097,7 @@ elif page == "Model Analytics":
             except Exception:
                 st.caption("Decile analysis not available.")
         else:
-            st.warning("Unable to load distributions. Please ensure test data and models are available in the project directory.")
+            st.warning("Test data not found. Ensure `data/processed/train_features.csv` exists.")
 
     # -- tab: Stability ---------------------------------------------------
     with tab_stability:
@@ -1211,7 +1225,7 @@ elif page == "Model Analytics":
             else:
                 st.caption("Demographic columns not found.")
         else:
-            st.info("Load data and models for fairness audit.")
+            st.warning("Test data not found. Ensure `data/processed/train_features.csv` exists.")
 
 
 # ===================================================================
