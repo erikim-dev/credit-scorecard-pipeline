@@ -54,40 +54,42 @@ st.markdown(f"""
     /* layout — start content just below the Streamlit header bar */
     .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
 
-    /* ── Sidebar: hidden by default on ALL viewports (desktop + mobile) ── */
+    /* ── Sidebar: HIDDEN by default, slides in only when user clicks toggle ── */
     section[data-testid="stSidebar"] {{
         background: #0d1117;
         border-right: 1px solid {BORDER};
-        /* Force overlay positioning so it never pushes main content */
         position: fixed !important;
-        left: 0 !important; top: 0 !important;
+        top: 0 !important;
         height: 100vh !important;
         z-index: 999 !important;
-        /* Sizing */
-        min-width: 0 !important;
-        width: 260px !important;
-        max-width: 320px !important;
-        /* Hidden by default — slide in when toggled */
-        transform: translateX(-100%) !important;
-        transition: transform 0.3s ease, box-shadow 0.3s ease !important;
-        overflow: hidden !important;
+        transition: transform 0.3s ease, visibility 0s linear 0.3s,
+                    box-shadow 0.3s ease !important;
     }}
-    /* When Streamlit marks sidebar as expanded → slide in */
-    section[data-testid="stSidebar"][aria-expanded="true"] {{
-        transform: translateX(0) !important;
-        box-shadow: 4px 0 24px rgba(0,0,0,0.45);
-        min-width: 220px !important;
-        width: fit-content !important;
-        max-width: 320px !important;
-        overflow: visible !important;
-    }}
-    /* When collapsed → absolutely hidden */
-    section[data-testid="stSidebar"][aria-expanded="false"] {{
+    /* ── Collapsed / default: off-screen via every possible method ── */
+    section[data-testid="stSidebar"]:not([aria-expanded="true"]) {{
         transform: translateX(-100%) !important;
+        left: -100vw !important;
         width: 0 !important;
         min-width: 0 !important;
+        max-width: 0 !important;
         overflow: hidden !important;
+        visibility: hidden !important;
+        clip-path: inset(0 100% 0 0) !important;
         box-shadow: none !important;
+    }}
+    /* ── Expanded: slide in as overlay ── */
+    section[data-testid="stSidebar"][aria-expanded="true"] {{
+        transform: translateX(0) !important;
+        left: 0 !important;
+        width: fit-content !important;
+        min-width: 220px !important;
+        max-width: 320px !important;
+        overflow: visible !important;
+        visibility: visible !important;
+        clip-path: none !important;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.45);
+        transition: transform 0.3s ease, visibility 0s linear 0s,
+                    box-shadow 0.3s ease !important;
     }}
     section[data-testid="stSidebar"] > div:first-child {{
         width: 100% !important;
@@ -101,7 +103,6 @@ st.markdown(f"""
         margin-left: 0 !important;
         padding-left: 0 !important;
     }}
-    /* Override Streamlit's inline margin-left on the main area */
     .stApp [data-testid="stSidebar"] ~ div,
     .stApp [data-testid="stSidebar"] + div,
     .stApp [data-testid="stSidebar"] ~ section {{
@@ -328,6 +329,46 @@ st.markdown(f"""
 
 </style>
 """, unsafe_allow_html=True)
+
+# JS enforcer — ensures sidebar stays hidden even if Streamlit's JS overrides CSS
+import streamlit.components.v1 as _components
+_components.html("""
+<script>
+(function() {
+    var doc = window.parent.document;
+    function enforceSidebar() {
+        var sb = doc.querySelector('section[data-testid="stSidebar"]');
+        if (!sb) return;
+        var expanded = sb.getAttribute('aria-expanded');
+        if (expanded !== 'true') {
+            sb.style.setProperty('transform', 'translateX(-100%)', 'important');
+            sb.style.setProperty('visibility', 'hidden', 'important');
+            sb.style.setProperty('width', '0px', 'important');
+            sb.style.setProperty('min-width', '0px', 'important');
+            sb.style.setProperty('overflow', 'hidden', 'important');
+            sb.style.setProperty('position', 'fixed', 'important');
+        } else {
+            sb.style.setProperty('transform', 'translateX(0)', 'important');
+            sb.style.setProperty('visibility', 'visible', 'important');
+            sb.style.setProperty('width', 'fit-content', 'important');
+            sb.style.setProperty('min-width', '220px', 'important');
+            sb.style.setProperty('overflow', 'visible', 'important');
+            sb.style.setProperty('position', 'fixed', 'important');
+        }
+    }
+    enforceSidebar();
+    var obs = new MutationObserver(enforceSidebar);
+    var target = doc.querySelector('section[data-testid="stSidebar"]');
+    if (target) obs.observe(target, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
+    // Also run periodically for first 5 seconds to catch late Streamlit renders
+    var count = 0;
+    var iv = setInterval(function() {
+        enforceSidebar();
+        if (++count > 25) clearInterval(iv);
+    }, 200);
+})();
+</script>
+""", height=0)
 
 
 # ---------------------------------------------------------------------------
