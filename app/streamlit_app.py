@@ -54,39 +54,31 @@ st.markdown(f"""
     /* layout — start content just below the Streamlit header bar */
     .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
 
-    /* ── Sidebar: HIDDEN by default, slides in only when user clicks toggle ── */
+    /* ── Sidebar: HIDDEN by default, slides in and PUSHES main content ── */
     section[data-testid="stSidebar"] {{
         background: #0d1117;
         border-right: 1px solid {BORDER};
         position: fixed !important;
         top: 0 !important;
+        left: 0 !important;
         height: 100vh !important;
         z-index: 999 !important;
+        width: 300px !important;
+        min-width: 300px !important;
+        max-width: 300px !important;
         transition: transform 0.3s ease, visibility 0s linear 0.3s,
                     box-shadow 0.3s ease !important;
     }}
-    /* ── Collapsed / default: off-screen via every possible method ── */
+    /* ── Collapsed / default: off-screen ── */
     section[data-testid="stSidebar"]:not([aria-expanded="true"]) {{
         transform: translateX(-100%) !important;
-        left: -100vw !important;
-        width: 0 !important;
-        min-width: 0 !important;
-        max-width: 0 !important;
-        overflow: hidden !important;
         visibility: hidden !important;
-        clip-path: inset(0 100% 0 0) !important;
         box-shadow: none !important;
     }}
-    /* ── Expanded: slide in as overlay ── */
+    /* ── Expanded: slide in ── */
     section[data-testid="stSidebar"][aria-expanded="true"] {{
         transform: translateX(0) !important;
-        left: 0 !important;
-        width: fit-content !important;
-        min-width: 220px !important;
-        max-width: 320px !important;
-        overflow: visible !important;
         visibility: visible !important;
-        clip-path: none !important;
         box-shadow: 4px 0 24px rgba(0,0,0,0.45);
         transition: transform 0.3s ease, visibility 0s linear 0s,
                     box-shadow 0.3s ease !important;
@@ -95,39 +87,21 @@ st.markdown(f"""
         width: 100% !important;
         padding: 1rem 0.8rem;
     }}
-    /* Prevent Streamlit from reserving space / pushing main content */
-    [data-testid="stAppViewBlockContainer"],
-    .stApp > div,
+
+    /* ── Main content: push right when sidebar is open ── */
     .stApp [data-testid="stAppViewContainer"],
     .stApp [data-testid="stMain"] {{
-        margin-left: 0 !important;
-        padding-left: 0 !important;
-    }}
-    .stApp [data-testid="stSidebar"] ~ div,
-    .stApp [data-testid="stSidebar"] + div,
-    .stApp [data-testid="stSidebar"] ~ section {{
-        margin-left: 0 !important;
-    }}
-
-    /* ── Dim overlay behind sidebar when open ── */
-    #sidebar-overlay {{
-        display: none;
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw; height: 100vh;
-        background: rgba(0,0,0,0.35);
-        z-index: 998;
-        cursor: pointer;
+        transition: margin-left 0.3s ease !important;
     }}
 
     /* ── Responsive sidebar width ── */
     @media (min-width: 1400px) {{
-        section[data-testid="stSidebar"] {{ max-width: 340px; }}
+        section[data-testid="stSidebar"] {{ width: 340px !important; min-width: 340px !important; max-width: 340px !important; }}
     }}
     /* ── Mobile: narrower sidebar + compact padding ── */
     @media (max-width: 768px) {{
         section[data-testid="stSidebar"] {{
-            width: 72vw; min-width: 0; max-width: 280px;
+            width: 260px !important; min-width: 260px !important; max-width: 260px !important;
         }}
         section[data-testid="stSidebar"] > div:first-child {{
             padding: 0.7rem 0.6rem;
@@ -136,7 +110,7 @@ st.markdown(f"""
     }}
     @media (max-width: 480px) {{
         section[data-testid="stSidebar"] {{
-            width: 80vw; max-width: 240px;
+            width: 220px !important; min-width: 220px !important; max-width: 220px !important;
         }}
         section[data-testid="stSidebar"] > div:first-child {{
             padding: 0.5rem 0.45rem;
@@ -145,7 +119,7 @@ st.markdown(f"""
     }}
     @media (max-width: 360px) {{
         section[data-testid="stSidebar"] {{
-            width: 85vw; max-width: 210px;
+            width: 200px !important; min-width: 200px !important; max-width: 200px !important;
         }}
     }}
 
@@ -280,6 +254,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # JS — collapse sidebar on load + close on click-outside / Esc
+# When sidebar opens/closes, push main content via margin-left
 import streamlit.components.v1 as _components
 _components.html("""
 <script>
@@ -305,40 +280,44 @@ _components.html("""
         return false;
     }
 
-    function getOrCreateOverlay() {
-        var ov = doc.getElementById('sidebar-overlay');
-        if (!ov) {
-            ov = doc.createElement('div');
-            ov.id = 'sidebar-overlay';
-            doc.body.appendChild(ov);
-        }
-        return ov;
+    /* Compute the sidebar width from CSS so the push amount stays in sync */
+    function getSidebarWidth() {
+        var sb = getSidebar();
+        if (!sb) return 300;
+        return sb.getBoundingClientRect().width || 300;
     }
 
-    function showOverlay() {
-        var ov = getOrCreateOverlay();
-        ov.style.display = 'block';
-    }
-    function hideOverlay() {
-        var ov = getOrCreateOverlay();
-        ov.style.display = 'none';
-    }
-
-    function syncOverlay() {
-        if (isOpen()) { showOverlay(); } else { hideOverlay(); }
+    /* Push / un-push the main content area */
+    function pushMain(open) {
+        var targets = doc.querySelectorAll(
+            '[data-testid="stAppViewContainer"], [data-testid="stMain"]'
+        );
+        var ml = open ? getSidebarWidth() + 'px' : '0px';
+        targets.forEach(function(el) {
+            el.style.setProperty('margin-left', ml, 'important');
+        });
     }
 
-    // Close sidebar when clicking the overlay (i.e. outside sidebar)
-    getOrCreateOverlay().addEventListener('click', function() {
-        if (isOpen()) clickCollapseBtn();
-        hideOverlay();
+    function syncState() {
+        pushMain(isOpen());
+    }
+
+    // Close sidebar when clicking outside (on the main content area)
+    doc.addEventListener('click', function(e) {
+        if (!isOpen()) return;
+        var sb = getSidebar();
+        if (sb && sb.contains(e.target)) return;           // click inside sidebar
+        // also ignore the expand button in the header (hamburger)
+        var expandBtn = doc.querySelector('button[data-testid="stSidebarNavToggle"]')
+                     || doc.querySelector('button[data-testid="baseButton-header"]');
+        if (expandBtn && expandBtn.contains(e.target)) return;
+        clickCollapseBtn();
     });
 
     // Close sidebar on Escape key
     doc.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && isOpen()) {
             clickCollapseBtn();
-            hideOverlay();
         }
     });
 
@@ -348,15 +327,17 @@ _components.html("""
         if (isOpen()) {
             clickCollapseBtn();
         }
+        pushMain(false);
         if (!isOpen() || ++bootAttempts > 40) clearInterval(bootIv);
     }, 200);
 
-    // Phase 2: watch aria-expanded to sync the overlay
+    // Phase 2: watch aria-expanded to sync push/un-push
     function startObserver() {
         var sb = getSidebar();
         if (!sb) return;
-        new MutationObserver(syncOverlay)
+        new MutationObserver(syncState)
             .observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
+        syncState();  // initial sync
     }
     setTimeout(startObserver, 500);
     setTimeout(startObserver, 2000);
