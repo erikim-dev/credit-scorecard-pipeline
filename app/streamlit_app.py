@@ -51,8 +51,8 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 st.markdown(f"""
 <style>
-    /* layout */
-    .block-container {{ padding-top: 3rem; padding-bottom: 1rem; }}
+    /* layout — start content just below the Streamlit header bar */
+    .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
 
     /* ── Sidebar: hidden by default on ALL viewports, revealed by toggle ── */
     section[data-testid="stSidebar"] {{
@@ -226,9 +226,9 @@ st.markdown(f"""
        ══════════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {{
 
-        /* ── Layout: push content below the fixed toggle button ── */
+        /* ── Layout: tighter padding on mobile ── */
         .block-container {{
-            padding-top: 3.2rem !important;
+            padding-top: 1rem !important;
             padding-left: 0.65rem !important;
             padding-right: 0.65rem !important;
             padding-bottom: 0.5rem !important;
