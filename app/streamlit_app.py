@@ -1084,26 +1084,26 @@ elif page == "Model Analytics":
 # PAGE: Data Explorer
 # ===================================================================
 elif page == "Data Explorer":
-    st.title("📊 Data Explorer")
+    st.title("Data Explorer")
     st.caption("Interactive exploration of the training dataset")
 
     test_df = load_test_data()
 
     if test_df is not None:
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("📈 Rows", f"{len(test_df):,}")
-        m2.metric("📋 Features", f"{test_df.shape[1] - 2}")
-        m3.metric("⚠️ Default Rate", f"{test_df['TARGET'].mean():.2%}")
-        m4.metric("❌ Missing Columns", f"{(test_df.isnull().any()).sum()}")
+        m1.metric("Rows", f"{len(test_df):,}")
+        m2.metric("Features", f"{test_df.shape[1] - 2}")
+        m3.metric("Default Rate", f"{test_df['TARGET'].mean():.2%}")
+        m4.metric("Missing Columns", f"{(test_df.isnull().any()).sum()}")
 
-        tab_ov, tab_corr, tab_feat = st.tabs(["📈 Overview", "🔗 Correlations", "🔍 Feature Drill-Down"])
+        tab_ov, tab_corr, tab_feat = st.tabs(["Overview", "Correlations", "Feature Drill-Down"])
 
         with tab_ov:
-            st.markdown("##### 📊 Sample Data")
+            st.markdown("##### Sample Data")
             n_rows = st.slider("Rows to display", 10, 500, 100, 10, key="ov_rows")
             st.dataframe(test_df.head(n_rows), use_container_width=True, height=400)
 
-            st.markdown("##### 📑 Column Statistics")
+            st.markdown("##### Column Statistics")
             desc = test_df.describe().T
             desc["missing_pct"] = test_df.isnull().mean()
             st.dataframe(
