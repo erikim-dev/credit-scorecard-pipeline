@@ -401,6 +401,56 @@ def score_application(data: dict, model_choice: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# Utility functions for enhancements
+# ---------------------------------------------------------------------------
+def get_risk_tier(score_prob):
+    """Classify probability score into risk tier"""
+    if score_prob < 0.2:
+        return "Low Risk", C3, "Approve"
+    elif score_prob < 0.4:
+        return "Low-Medium Risk", C1, "Approve"
+    elif score_prob < 0.6:
+        return "Medium Risk", C5, "Review"
+    elif score_prob < 0.8:
+        return "Medium-High Risk", "#ff9500", "Review"
+    else:
+        return "High Risk", C2, "Decline"
+
+
+def calculate_disparate_impact(data, pred, group_col):
+    """Calculate disparate impact ratio (80% rule)"""
+    if group_col not in data.columns:
+        return None
+    groups = data[group_col].unique()
+    if len(groups) < 2:
+        return None
+    
+    rates = {}
+    for g in groups:
+        mask = data[group_col] == g
+        if mask.sum() > 50:
+            rate = (pred[mask.values] >= 0.5).mean()
+            rates[str(g)] = rate
+    
+    if len(rates) < 2:
+        return None
+    
+    min_rate = min(rates.values())
+    max_rate = max(rates.values())
+    return min_rate / max_rate if max_rate > 0 else None
+
+
+def confusion_matrix_at_threshold(y_true, y_pred, threshold=0.5):
+    """Calculate confusion matrix at given threshold"""
+    y_pred_class = (y_pred >= threshold).astype(int)
+    tn = ((y_pred_class == 0) & (y_true == 0)).sum()
+    fp = ((y_pred_class == 1) & (y_true == 0)).sum()
+    fn = ((y_pred_class == 0) & (y_true == 1)).sum()
+    tp = ((y_pred_class == 1) & (y_true == 1)).sum()
+    return tn, fp, fn, tp
+
+
+# ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
 with st.sidebar:
@@ -426,6 +476,25 @@ with st.sidebar:
         Features <b style="color:{TEXT}">300</b>
     </div>
     """, unsafe_allow_html=True)
+
+    st.divider()
+    with st.expander("Help & Glossary"):
+        st.markdown(f"""
+        **Model Metrics**
+        - **AUC-ROC**: Area under ROC curve (0-1). Higher is better. 0.5 = random, 1.0 = perfect.
+        - **Gini**: Normalized AUC (0-1). Shows model's ability to rank-order applicants.
+        - **KS Statistic**: Maximum separation between Default and Non-Default distributions.
+        
+        **Features**
+        - **WoE (Weight of Evidence)**: Log ratio of good vs bad rate. Captures predictive power.
+        - **IV (Information Value)**: Sum of WoE × (% Good - % Bad). Measures feature importance.
+        - **Missing Indicator**: Binary flags for missing values in credit bureau data.
+        
+        **Risk Metrics**
+        - **PSI (Population Stability Index)**: Measures data drift. <0.10=Stable, 0.10-0.20=Watch, >0.20=Alert.
+        - **Fairness**: AUC consistency across demographic groups. Flag if AUC gap > 0.05.
+        - **Calibration**: Predicted probabilities match observed default rates.
+        """)
 
 # ===================================================================
 # PAGE: Scoring  (live-updating sliders, real-time gauge)
@@ -666,9 +735,11 @@ elif page == "Batch Processing":
                 results_list = []
                 prog = st.progress(0.0, text="Scoring...")
                 t0 = time.time()
+                failed_rows = []
 
                 for i, row in df.iterrows():
-                    pay = {
+                    try:
+                        pay = {
                         "age": int(row.get("age", 30)),
                         "income": float(row.get("income", 100_000)),
                         "loan_amount": float(row.get("loan_amount", 200_000)),
@@ -742,6 +813,7 @@ elif page == "Model Analytics":
 
     # -- tab: Performance -------------------------------------------------
     with tab_perf:
+        st.markdown("<small>Comprehensive model metrics on hold-out dataset</small>", unsafe_allow_html=True)
         if comparison:
             if isinstance(comparison, list):
                 mdf = pd.DataFrame(comparison)
@@ -807,6 +879,36 @@ elif page == "Model Analytics":
                     })
             if ov:
                 st.dataframe(pd.DataFrame(ov), use_container_width=True, hide_index=True)
+            
+            # Threshold exploration
+            st.markdown("##### Confusion Matrix at Different Thresholds")
+            if test_df is not None and "xgb" in artefacts:
+                from sklearn.model_selection import train_test_split
+                exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
+                fc = [c for c in test_df.columns if c not in exclude]
+                X = test_df[fc]; y = test_df["TARGET"]
+                _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+                
+                if artefacts.get("xgb") is not None:
+                    try:
+                        yp = artefacts["xgb"].predict_proba(Xh)[:, 1]
+                        
+                        threshold_vals = [0.3, 0.4, 0.5, 0.6, 0.7]
+                        cm_data = []
+                        for thresh in threshold_vals:
+                            tn, fp, fn, tp = confusion_matrix_at_threshold(yh, yp, thresh)
+                            sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+                            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+                            cm_data.append({
+                                "Threshold": f"{thresh:.1f}",
+                                "True Pos": int(tp),
+                                "False Pos": int(fp),
+                                "Sensitivity": f"{sensitivity:.2%}",
+                                "Specificity": f"{specificity:.2%}",
+                            })
+                        st.dataframe(pd.DataFrame(cm_data), use_container_width=True, hide_index=True)
+                    except Exception:
+                        st.caption("Confusion matrix not available.")
         else:
             st.info("No model comparison data found. Run evaluation first.")
 
@@ -1054,12 +1156,57 @@ elif page == "Model Analytics":
                 fdf = pd.DataFrame(fair)
                 st.dataframe(fdf, use_container_width=True, hide_index=True)
 
+                # AUC Parity Check
+                aucs_by_group = fdf.groupby("Group")["AUC"].agg(["min", "max"])
+                aucs_by_group["Gap"] = aucs_by_group["max"] - aucs_by_group["min"]
+                
+                st.markdown("##### AUC Parity Analysis")
+                parity_data = []
+                for group in aucs_by_group.index:
+                    group_aucs = fdf[fdf["Group"] == group]["AUC"]
+                    gap = group_aucs.max() - group_aucs.min()
+                    status = "Pass" if gap < 0.05 else ("Caution" if gap < 0.08 else "Fail")
+                    parity_data.append({
+                        "Group": group,
+                        "Min AUC": f"{group_aucs.min():.4f}",
+                        "Max AUC": f"{group_aucs.max():.4f}",
+                        "Gap": f"{gap:.4f}",
+                        "Status": status,
+                    })
+                st.dataframe(pd.DataFrame(parity_data), use_container_width=True, hide_index=True)
+
                 fig = px.bar(fdf, x="Value", y="AUC", color="Group",
                              color_discrete_sequence=PAL, text="AUC")
                 fig.update_layout(template=T, yaxis_range=[0.5, 1.0],
                                   height=380, margin=dict(t=20))
                 fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Acceptance Rate Analysis
+                st.markdown("##### Acceptance Rate by Group")
+                acc_data = []
+                for _, row in fdf.iterrows():
+                    group_val = row["Value"]
+                    if row["Group"] == "Gender" and "CODE_GENDER" in tsplit.columns:
+                        mask = tsplit["CODE_GENDER"] == group_val
+                    elif row["Group"] == "Age" and "DAYS_BIRTH" in tsplit.columns:
+                        ages = (-tsplit["DAYS_BIRTH"] / 365.25).astype(int)
+                        bins = pd.cut(ages, bins=[18, 30, 40, 50, 60, 100],
+                                      labels=["18-30", "31-40", "41-50", "51-60", "60+"])
+                        mask = bins == group_val
+                    else:
+                        continue
+                    
+                    if mask.sum() > 0:
+                        acc_rate = (yp[mask.values] >= 0.5).mean()
+                        acc_data.append({
+                            "Group": row["Group"],
+                            "Value": group_val,
+                            "Approval Rate": f"{acc_rate:.2%}",
+                        })
+                
+                if acc_data:
+                    st.dataframe(pd.DataFrame(acc_data), use_container_width=True, hide_index=True)
             else:
                 st.caption("Demographic columns not found.")
         else:
@@ -1183,3 +1330,45 @@ python src/feature_engineering.py --data data/raw
 
 Once the data is ready, refresh this page.
 """)
+
+
+# ---------------------------------------------------------------------------
+# Footer with model metadata
+# ---------------------------------------------------------------------------
+st.divider()
+footer_col1, footer_col2, footer_col3 = st.columns(3)
+
+with footer_col1:
+    st.markdown(f"""
+    <small style="color: {MUTED};">
+    <b>Models</b><br>
+    Scorecard (Champion)<br>
+    XGBoost, LightGBM, Stacking
+    </small>
+    """, unsafe_allow_html=True)
+
+with footer_col2:
+    st.markdown(f"""
+    <small style="color: {MUTED};">
+    <b>Training Data</b><br>
+    Features: 300<br>
+    Last Updated: Feb 28, 2026
+    </small>
+    """, unsafe_allow_html=True)
+
+with footer_col3:
+    st.markdown(f"""
+    <small style="color: {MUTED};">
+    <b>Performance</b><br>
+    Best AUC: 0.7903 (Stacking)<br>
+    Gini: 0.5806
+    </small>
+    """, unsafe_allow_html=True)
+
+st.markdown(f"""
+<small style="color: {MUTED}; text-align: center; display: block; margin-top: 2rem;">
+GitHub: <a href="https://github.com/erikim-dev/credit-scorecard-pipeline" target="_blank">erikim-dev/credit-scorecard-pipeline</a> | 
+Dashboard: v2.1.0
+</small>
+""", unsafe_allow_html=True)
+
