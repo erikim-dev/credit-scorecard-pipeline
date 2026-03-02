@@ -65,7 +65,7 @@ st.markdown(f"""
         transition: transform 0.3s ease, visibility 0s linear 0.3s,
                     box-shadow 0.3s ease !important;
     }}
-    /* ── Collapsed / default: off-screen via every possible method ── */
+    /* ── Collapsed / default: off-screen ── */
     section[data-testid="stSidebar"]:not([aria-expanded="true"]) {{
         transform: translateX(-100%) !important;
         left: -100vw !important;
@@ -73,9 +73,8 @@ st.markdown(f"""
         min-width: 0 !important;
         max-width: 0 !important;
         overflow: hidden !important;
-        visibility: hidden !important;
-        clip-path: inset(0 100% 0 0) !important;
         box-shadow: none !important;
+        /* Do NOT set visibility:hidden — it hides the toggle button child too */
     }}
     /* ── Expanded: slide in as overlay ── */
     section[data-testid="stSidebar"][aria-expanded="true"] {{
@@ -340,35 +339,61 @@ _components.html("""
     function collapseSidebar() {
         var sb = doc.querySelector('section[data-testid="stSidebar"]');
         if (!sb) return false;
-
-        // If sidebar is expanded, click the collapse button to close it
         if (sb.getAttribute('aria-expanded') === 'true') {
-            // Try every known collapse button selector
             var btn = sb.querySelector('button[data-testid="stSidebarCollapseButton"]')
                    || sb.querySelector('button[kind="header"]')
-                   || sb.querySelector('[data-testid="stSidebarNav"] button')
                    || sb.querySelector('button');
-            if (btn) {
-                btn.click();
-                return true;
-            }
-            // Fallback: directly set aria-expanded to false
+            if (btn) { btn.click(); return true; }
             sb.setAttribute('aria-expanded', 'false');
         }
         return true;
     }
 
-    function hideStyles(sb) {
+    function ensureToggleVisible() {
+        // The open-sidebar toggle (shown when sidebar is collapsed)
+        var ctrl = doc.querySelector('[data-testid="collapsedControl"]');
+        if (ctrl) {
+            ctrl.style.setProperty('display', 'flex', 'important');
+            ctrl.style.setProperty('visibility', 'visible', 'important');
+            ctrl.style.setProperty('opacity', '1', 'important');
+            ctrl.style.setProperty('pointer-events', 'auto', 'important');
+            ctrl.style.setProperty('position', 'fixed', 'important');
+            ctrl.style.setProperty('top', '0.55rem', 'important');
+            ctrl.style.setProperty('left', '0.5rem', 'important');
+            ctrl.style.setProperty('z-index', '1001', 'important');
+            // Also ensure its children are visible
+            var kids = ctrl.querySelectorAll('*');
+            for (var i = 0; i < kids.length; i++) {
+                kids[i].style.setProperty('visibility', 'visible', 'important');
+                kids[i].style.setProperty('display', kids[i].tagName === 'P' ? 'none' : '', 'important');
+                kids[i].style.setProperty('opacity', '1', 'important');
+            }
+        }
+        // The close-sidebar button (shown when sidebar is expanded)
+        var closeBtn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]');
+        if (closeBtn) {
+            closeBtn.style.setProperty('visibility', 'visible', 'important');
+            closeBtn.style.setProperty('opacity', '1', 'important');
+            closeBtn.style.setProperty('display', 'flex', 'important');
+            closeBtn.style.setProperty('pointer-events', 'auto', 'important');
+            closeBtn.style.setProperty('position', 'fixed', 'important');
+            closeBtn.style.setProperty('top', '0.55rem', 'important');
+            closeBtn.style.setProperty('left', '0.5rem', 'important');
+            closeBtn.style.setProperty('z-index', '1002', 'important');
+        }
+    }
+
+    function hideSidebar(sb) {
         if (!sb) return;
         sb.style.setProperty('transform', 'translateX(-100%)', 'important');
-        sb.style.setProperty('visibility', 'hidden', 'important');
         sb.style.setProperty('width', '0px', 'important');
         sb.style.setProperty('min-width', '0px', 'important');
         sb.style.setProperty('overflow', 'hidden', 'important');
         sb.style.setProperty('position', 'fixed', 'important');
+        // Don't set visibility:hidden — it hides the toggle button too
     }
 
-    function showStyles(sb) {
+    function showSidebar(sb) {
         if (!sb) return;
         sb.style.setProperty('transform', 'translateX(0)', 'important');
         sb.style.setProperty('visibility', 'visible', 'important');
@@ -382,33 +407,37 @@ _components.html("""
         var sb = doc.querySelector('section[data-testid="stSidebar"]');
         if (!sb) return;
         if (sb.getAttribute('aria-expanded') === 'true') {
-            showStyles(sb);
+            showSidebar(sb);
         } else {
-            hideStyles(sb);
+            hideSidebar(sb);
         }
+        ensureToggleVisible();
     }
 
-    // Phase 1: collapse on load (retry until sidebar exists)
+    // Phase 1: collapse on load
     var collapsed = false;
     var attempts = 0;
     var bootInterval = setInterval(function() {
         if (!collapsed) collapsed = collapseSidebar();
-        var sb = doc.querySelector('section[data-testid="stSidebar"]');
-        if (sb && sb.getAttribute('aria-expanded') !== 'true') {
-            hideStyles(sb);
-        }
-        if (++attempts > 50) clearInterval(bootInterval);  // stop after 10s
+        enforce();
+        if (++attempts > 50) clearInterval(bootInterval);
     }, 200);
 
-    // Phase 2: MutationObserver to handle user toggle
+    // Phase 2: MutationObserver for user interaction
     function startObserver() {
         var sb = doc.querySelector('section[data-testid="stSidebar"]');
         if (!sb) return;
-        var obs = new MutationObserver(enforce);
+        var obs = new MutationObserver(function() {
+            enforce();
+        });
         obs.observe(sb, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
     }
     setTimeout(startObserver, 500);
     setTimeout(startObserver, 2000);
+
+    // Also watch for DOM changes that might re-hide the toggle
+    var bodyObs = new MutationObserver(ensureToggleVisible);
+    bodyObs.observe(doc.body, {childList: true, subtree: true});
 })();
 </script>
 """, height=0)
