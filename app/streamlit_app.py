@@ -67,21 +67,27 @@ st.markdown(f"""
         padding: 1rem 0.8rem;
     }}
 
-    /* ── Toggle button: always a clean icon, never clipped text ── */
+    /* ── Toggle button: ALWAYS visible, both states ── */
     button[data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stSidebarCollapseButton"] {{
+    button[data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"] {{
         display: flex !important;
         align-items: center;
         justify-content: center;
         visibility: visible !important;
         opacity: 1 !important;
+        pointer-events: auto !important;
         z-index: 1001;
+        position: fixed !important;
+        top: 0.55rem;
+        left: 0.5rem;
         min-width: 36px; min-height: 36px;
         border-radius: 8px;
         background: {CARD} !important;
         border: 1px solid {BORDER} !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-        overflow: hidden;          /* hide any text overflow */
+        overflow: hidden;
     }}
     /* Hide the label text inside the toggle so only the arrow icon shows */
     button[data-testid="stSidebarCollapsedControl"] p,
@@ -97,10 +103,6 @@ st.markdown(f"""
     button[data-testid="stSidebarCollapseButton"] svg {{
         transform: rotate(180deg);
         transition: transform 0.25s ease;
-    }}
-    /* Collapse button sticks to top of sidebar */
-    section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
-        position: sticky; top: 0.5rem;
     }}
 
     /* ── Responsive sidebar width ── */
@@ -122,13 +124,6 @@ st.markdown(f"""
         section[data-testid="stSidebar"][aria-expanded="true"] {{
             transform: translateX(0);
             box-shadow: 4px 0 24px rgba(0,0,0,0.5);
-        }}
-        /* Open-menu toggle (collapse ✕ / arrow): ALWAYS visible on top */
-        button[data-testid="stSidebarCollapsedControl"],
-        section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
-            position: fixed !important;
-            top: 0.55rem; left: 0.5rem;
-            z-index: 1002;
         }}
     }}
     @media (max-width: 480px) {{
