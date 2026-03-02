@@ -108,66 +108,45 @@ st.markdown(f"""
         margin-left: 0 !important;
     }}
 
-    /* ── Toggle button: ALWAYS visible, both states ── */
-    /* Target every layer of the Streamlit sidebar control */
+    /* ── Hide ALL Streamlit native sidebar toggle buttons ── */
     [data-testid="collapsedControl"],
-    [data-testid="collapsedControl"] > * ,
     [data-testid="stSidebarCollapsedControl"],
     button[data-testid="stSidebarCollapsedControl"],
     button[data-testid="stSidebarCollapseButton"] {{
-        display: flex !important;
-        align-items: center;
-        justify-content: center;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important; height: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
     }}
-    /* Pin the outer wrapper fixed top-left */
-    [data-testid="collapsedControl"] {{
+
+    /* ── Custom toggle button: permanently fixed left edge ── */
+    #custom-sidebar-toggle {{
         position: fixed !important;
         top: 0.55rem;
         left: 0.5rem;
-        z-index: 1001;
-    }}
-    /* Style the clickable icon inside */
-    [data-testid="collapsedControl"] [data-testid="stIconMaterial"],
-    button[data-testid="stSidebarCollapseButton"] {{
-        min-width: 36px; min-height: 36px;
+        z-index: 99999 !important;
+        width: 36px; height: 36px;
         border-radius: 8px;
-        background: {CARD} !important;
-        border: 1px solid {BORDER} !important;
+        background: {CARD};
+        border: 1px solid {BORDER};
         box-shadow: 0 2px 6px rgba(0,0,0,0.35);
         cursor: pointer;
-        color: {TEXT} !important;
-        font-size: 1.2rem;
+        color: {TEXT};
+        font-size: 1.3rem;
         display: flex !important;
         align-items: center;
         justify-content: center;
+        transition: transform 0.25s ease, background 0.2s ease;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
     }}
-    /* The close button inside the open sidebar — also pinned */
-    button[data-testid="stSidebarCollapseButton"] {{
-        position: fixed !important;
-        top: 0.55rem;
-        left: 0.5rem;
-        z-index: 1002;
+    #custom-sidebar-toggle:hover {{
+        background: {BORDER};
     }}
-    /* Hide any label text — only arrow/icon shows */
-    button[data-testid="stSidebarCollapsedControl"] p,
-    button[data-testid="stSidebarCollapseButton"] p,
-    [data-testid="collapsedControl"] p {{
-        display: none !important;
-    }}
-    /* Open arrow: default direction (→) */
-    [data-testid="collapsedControl"] svg,
-    button[data-testid="stSidebarCollapsedControl"] svg {{
-        transform: rotate(0deg);
-        transition: transform 0.25s ease;
-    }}
-    /* Close arrow: flipped (←) */
-    button[data-testid="stSidebarCollapseButton"] svg,
-    button[data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"] {{
+    #custom-sidebar-toggle.open {{
+        /* When sidebar is open, rotate arrow to point left */
         transform: rotate(180deg);
-        transition: transform 0.25s ease;
     }}
 
     /* ── Responsive sidebar width ── */
@@ -329,115 +308,92 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# JS enforcer — programmatically collapse sidebar on load, then keep it hidden
+# Custom sidebar toggle — inject a permanent button into the parent document
 import streamlit.components.v1 as _components
 _components.html("""
 <script>
 (function() {
     var doc = window.parent.document;
 
-    function collapseSidebar() {
-        var sb = doc.querySelector('section[data-testid="stSidebar"]');
-        if (!sb) return false;
-        if (sb.getAttribute('aria-expanded') === 'true') {
-            var btn = sb.querySelector('button[data-testid="stSidebarCollapseButton"]')
-                   || sb.querySelector('button[kind="header"]')
-                   || sb.querySelector('button');
-            if (btn) { btn.click(); return true; }
-            sb.setAttribute('aria-expanded', 'false');
-        }
-        return true;
+    // ── Create the custom toggle button (only once) ──
+    if (!doc.getElementById('custom-sidebar-toggle')) {
+        var btn = doc.createElement('div');
+        btn.id = 'custom-sidebar-toggle';
+        btn.innerHTML = '&#9776;';  // hamburger ☰
+        btn.title = 'Toggle menu';
+        doc.body.appendChild(btn);
     }
 
-    function ensureToggleVisible() {
-        // The open-sidebar toggle (shown when sidebar is collapsed)
-        var ctrl = doc.querySelector('[data-testid="collapsedControl"]');
-        if (ctrl) {
-            ctrl.style.setProperty('display', 'flex', 'important');
-            ctrl.style.setProperty('visibility', 'visible', 'important');
-            ctrl.style.setProperty('opacity', '1', 'important');
-            ctrl.style.setProperty('pointer-events', 'auto', 'important');
-            ctrl.style.setProperty('position', 'fixed', 'important');
-            ctrl.style.setProperty('top', '0.55rem', 'important');
-            ctrl.style.setProperty('left', '0.5rem', 'important');
-            ctrl.style.setProperty('z-index', '1001', 'important');
-            // Also ensure its children are visible
-            var kids = ctrl.querySelectorAll('*');
-            for (var i = 0; i < kids.length; i++) {
-                kids[i].style.setProperty('visibility', 'visible', 'important');
-                kids[i].style.setProperty('display', kids[i].tagName === 'P' ? 'none' : '', 'important');
-                kids[i].style.setProperty('opacity', '1', 'important');
-            }
-        }
-        // The close-sidebar button (shown when sidebar is expanded)
-        var closeBtn = doc.querySelector('button[data-testid="stSidebarCollapseButton"]');
-        if (closeBtn) {
-            closeBtn.style.setProperty('visibility', 'visible', 'important');
-            closeBtn.style.setProperty('opacity', '1', 'important');
-            closeBtn.style.setProperty('display', 'flex', 'important');
-            closeBtn.style.setProperty('pointer-events', 'auto', 'important');
-            closeBtn.style.setProperty('position', 'fixed', 'important');
-            closeBtn.style.setProperty('top', '0.55rem', 'important');
-            closeBtn.style.setProperty('left', '0.5rem', 'important');
-            closeBtn.style.setProperty('z-index', '1002', 'important');
-        }
+    var toggleBtn = doc.getElementById('custom-sidebar-toggle');
+    var sidebarOpen = false;
+
+    function getSidebar() {
+        return doc.querySelector('section[data-testid="stSidebar"]');
     }
 
-    function hideSidebar(sb) {
+    function hideSidebar() {
+        var sb = getSidebar();
         if (!sb) return;
+        sidebarOpen = false;
         sb.style.setProperty('transform', 'translateX(-100%)', 'important');
         sb.style.setProperty('width', '0px', 'important');
         sb.style.setProperty('min-width', '0px', 'important');
+        sb.style.setProperty('max-width', '0px', 'important');
         sb.style.setProperty('overflow', 'hidden', 'important');
         sb.style.setProperty('position', 'fixed', 'important');
-        // Don't set visibility:hidden — it hides the toggle button too
+        sb.style.setProperty('box-shadow', 'none', 'important');
+        sb.setAttribute('aria-expanded', 'false');
+        toggleBtn.classList.remove('open');
+        toggleBtn.innerHTML = '&#9776;';  // ☰
     }
 
-    function showSidebar(sb) {
+    function showSidebar() {
+        var sb = getSidebar();
         if (!sb) return;
+        sidebarOpen = true;
         sb.style.setProperty('transform', 'translateX(0)', 'important');
-        sb.style.setProperty('visibility', 'visible', 'important');
         sb.style.setProperty('width', 'fit-content', 'important');
         sb.style.setProperty('min-width', '220px', 'important');
+        sb.style.setProperty('max-width', '320px', 'important');
         sb.style.setProperty('overflow', 'visible', 'important');
+        sb.style.setProperty('visibility', 'visible', 'important');
         sb.style.setProperty('position', 'fixed', 'important');
+        sb.style.setProperty('box-shadow', '4px 0 24px rgba(0,0,0,0.45)', 'important');
+        sb.setAttribute('aria-expanded', 'true');
+        toggleBtn.classList.add('open');
+        toggleBtn.innerHTML = '&#10005;';  // ✕
     }
 
-    function enforce() {
-        var sb = doc.querySelector('section[data-testid="stSidebar"]');
-        if (!sb) return;
-        if (sb.getAttribute('aria-expanded') === 'true') {
-            showSidebar(sb);
-        } else {
-            hideSidebar(sb);
+    function toggle() {
+        if (sidebarOpen) { hideSidebar(); } else { showSidebar(); }
+    }
+
+    toggleBtn.addEventListener('click', toggle);
+
+    // Hide sidebar on initial load
+    var bootAttempts = 0;
+    var bootIv = setInterval(function() {
+        var sb = getSidebar();
+        if (sb) {
+            hideSidebar();
+            clearInterval(bootIv);
         }
-        ensureToggleVisible();
-    }
+        if (++bootAttempts > 50) clearInterval(bootIv);
+    }, 150);
 
-    // Phase 1: collapse on load
-    var collapsed = false;
-    var attempts = 0;
-    var bootInterval = setInterval(function() {
-        if (!collapsed) collapsed = collapseSidebar();
-        enforce();
-        if (++attempts > 50) clearInterval(bootInterval);
-    }, 200);
-
-    // Phase 2: MutationObserver for user interaction
-    function startObserver() {
-        var sb = doc.querySelector('section[data-testid="stSidebar"]');
+    // Watch for Streamlit re-renders that might reset the sidebar
+    var observer = new MutationObserver(function() {
+        var sb = getSidebar();
         if (!sb) return;
-        var obs = new MutationObserver(function() {
-            enforce();
-        });
-        obs.observe(sb, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
-    }
-    setTimeout(startObserver, 500);
-    setTimeout(startObserver, 2000);
-
-    // Also watch for DOM changes that might re-hide the toggle
-    var bodyObs = new MutationObserver(ensureToggleVisible);
-    bodyObs.observe(doc.body, {childList: true, subtree: true});
+        // If we want it hidden but Streamlit re-expanded it, re-hide
+        if (!sidebarOpen && sb.getAttribute('aria-expanded') === 'true') {
+            hideSidebar();
+        }
+    });
+    setTimeout(function() {
+        var sb = getSidebar();
+        if (sb) observer.observe(sb, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
+    }, 1000);
 })();
 </script>
 """, height=0)
