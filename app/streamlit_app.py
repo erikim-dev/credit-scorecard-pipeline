@@ -8,14 +8,12 @@ import sys
 import pathlib
 import json
 import os
-import time
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -89,7 +87,20 @@ st.markdown(f"""
     /* hide chrome */
     #MainMenu, footer {{ visibility: hidden; }}
 
-    /* Mobile: auto-collapse sidebar, reveal on hamburger tap */
+    /* Sidebar toggle always visible (collapsed or expanded) */
+    button[data-testid="stSidebarCollapsedControl"],
+    button[data-testid="stSidebarCollapseButton"] {{
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 1000;
+    }}
+    /* When sidebar is open, pin the ✕ button so it doesn't scroll away */
+    section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
+        position: sticky; top: 0.5rem;
+    }}
+
+    /* Mobile: slide-in / slide-out sidebar */
     @media (max-width: 768px) {{
         section[data-testid="stSidebar"] {{
             position: fixed; left: 0; top: 0; z-index: 999;
@@ -100,7 +111,6 @@ st.markdown(f"""
             transform: translateX(0);
             box-shadow: 4px 0 24px rgba(0,0,0,0.5);
         }}
-        /* keep the hamburger / collapse button visible */
         button[data-testid="stSidebarCollapsedControl"] {{
             display: block !important;
             z-index: 1000;
@@ -229,6 +239,23 @@ def load_comparison():
             except Exception:
                 continue
     return None
+
+
+@st.cache_data(show_spinner=False)
+def _cached_holdout_split(df):
+    """Stratified hold-out split with label-encoded object columns. Cached."""
+    from sklearn.model_selection import train_test_split
+    exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
+    fc = [c for c in df.columns if c not in exclude]
+    X = df[fc].copy()
+    for col in X.select_dtypes(include="object").columns:
+        X[col] = X[col].astype("category").cat.codes
+    y = df["TARGET"]
+    _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    _, tsplit, _, _ = train_test_split(
+        df, df["TARGET"], test_size=0.2, random_state=42, stratify=df["TARGET"],
+    )
+    return Xh, yh, tsplit
 
 
 def ensure_test_data_exists():
@@ -1002,22 +1029,10 @@ elif page == "Model Analytics":
     test_df = load_analytics_sample()   # 20K stratified sample — fast & sufficient
     artefacts = load_models()
 
-    # Prepare hold-out split ONCE for all tabs
-    # Object columns are label-encoded → int so tree models accept them
+    # Prepare hold-out split ONCE for all tabs (cached across reruns)
     _Xh = _yh = _tsplit = None
     if test_df is not None and "TARGET" in test_df.columns:
-        from sklearn.model_selection import train_test_split
-        exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-        fc = [c for c in test_df.columns if c not in exclude]
-        X = test_df[fc].copy()
-        for col in X.select_dtypes(include="object").columns:
-            X[col] = X[col].astype("category").cat.codes
-        y = test_df["TARGET"]
-        _, _Xh, _, _yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-        # tsplit keeps ALL columns (including non-numeric) for demographic analysis
-        _, _tsplit, _, _ = train_test_split(
-            test_df, test_df["TARGET"], test_size=0.2, random_state=42, stratify=test_df["TARGET"],
-        )
+        _Xh, _yh, _tsplit = _cached_holdout_split(test_df)
 
     tab_perf, tab_roc, tab_dist, tab_stability, tab_fairness = st.tabs([
         "Performance", "ROC Curves", "Distributions", "Stability", "Fairness",
