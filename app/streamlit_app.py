@@ -52,18 +52,29 @@ st.set_page_config(
 st.markdown(f"""
 <style>
     /* layout */
-    .block-container {{ padding-top: 1.2rem; padding-bottom: 1rem; }}
+    .block-container {{ padding-top: 3rem; padding-bottom: 1rem; }}
 
-    /* ── Sidebar: dynamic width, auto-fit contents ── */
+    /* ── Sidebar: hidden by default on ALL viewports, revealed by toggle ── */
     section[data-testid="stSidebar"] {{
         background: #0d1117;
         border-right: 1px solid {BORDER};
         min-width: 180px;
         width: fit-content;
         max-width: 320px;
+        /* Start off-screen; Streamlit sets aria-expanded when user clicks toggle */
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        position: fixed;
+        left: 0; top: 0;
+        height: 100vh;
+        z-index: 999;
+    }}
+    section[data-testid="stSidebar"][aria-expanded="true"] {{
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.45);
     }}
     section[data-testid="stSidebar"] > div:first-child {{
-        width: 100%;          /* fill the auto-sized panel */
+        width: 100%;
         padding: 1rem 0.8rem;
     }}
 
@@ -133,21 +144,14 @@ st.markdown(f"""
     @media (min-width: 1400px) {{
         section[data-testid="stSidebar"] {{ max-width: 340px; }}
     }}
-    /* ── Mobile sidebar: dynamic size per screen width ── */
+    /* ── Mobile: narrower sidebar + compact padding ── */
     @media (max-width: 768px) {{
         section[data-testid="stSidebar"] {{
-            position: fixed; left: 0; top: 0; z-index: 999;
             width: 72vw; min-width: 0; max-width: 280px;
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
         }}
         section[data-testid="stSidebar"] > div:first-child {{
             padding: 0.7rem 0.6rem;
             font-size: 0.88rem;
-        }}
-        section[data-testid="stSidebar"][aria-expanded="true"] {{
-            transform: translateX(0);
-            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
         }}
     }}
     @media (max-width: 480px) {{
