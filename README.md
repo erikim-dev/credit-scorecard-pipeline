@@ -250,6 +250,8 @@ Full model governance documentation: [reports/model_card.md](reports/model_card.
 
 Covers: model purpose, training data details, performance by subgroup, fairness analysis, known limitations, regulatory considerations, monitoring plan, and version history.
 
+Sample CSV for batch upload: [data/sample_applicants.csv](data/sample_applicants.csv)
+
 ---
 
 ## Why models are tracked in this repository
