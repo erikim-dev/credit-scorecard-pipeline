@@ -54,40 +54,57 @@ st.markdown(f"""
     /* layout — start content just below the Streamlit header bar */
     .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
 
-    /* ── Sidebar: hidden by default on ALL viewports, revealed by toggle ── */
+    /* ── Sidebar: hidden by default on ALL viewports (desktop + mobile) ── */
     section[data-testid="stSidebar"] {{
         background: #0d1117;
         border-right: 1px solid {BORDER};
-        min-width: 180px !important;
-        width: fit-content !important;
-        max-width: 320px !important;
-        /* Override Streamlit's own positioning on desktop */
+        /* Force overlay positioning so it never pushes main content */
         position: fixed !important;
         left: 0 !important; top: 0 !important;
         height: 100vh !important;
         z-index: 999 !important;
-        /* Hidden by default — slide in on toggle */
+        /* Sizing */
+        min-width: 0 !important;
+        width: 260px !important;
+        max-width: 320px !important;
+        /* Hidden by default — slide in when toggled */
         transform: translateX(-100%) !important;
-        transition: transform 0.3s ease !important;
+        transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+        overflow: hidden !important;
     }}
     /* When Streamlit marks sidebar as expanded → slide in */
     section[data-testid="stSidebar"][aria-expanded="true"] {{
         transform: translateX(0) !important;
         box-shadow: 4px 0 24px rgba(0,0,0,0.45);
+        min-width: 220px !important;
+        width: fit-content !important;
+        max-width: 320px !important;
+        overflow: visible !important;
     }}
-    /* When collapsed, also ensure it stays hidden (Streamlit sometimes sets width:0) */
+    /* When collapsed → absolutely hidden */
     section[data-testid="stSidebar"][aria-expanded="false"] {{
         transform: translateX(-100%) !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        box-shadow: none !important;
     }}
     section[data-testid="stSidebar"] > div:first-child {{
         width: 100% !important;
         padding: 1rem 0.8rem;
     }}
-    /* Prevent Streamlit from pushing main content left when sidebar "opens" */
-    [data-testid="stAppViewBlockContainer"] {{
+    /* Prevent Streamlit from reserving space / pushing main content */
+    [data-testid="stAppViewBlockContainer"],
+    .stApp > div,
+    .stApp [data-testid="stAppViewContainer"],
+    .stApp [data-testid="stMain"] {{
         margin-left: 0 !important;
+        padding-left: 0 !important;
     }}
-    .stApp [data-testid="stSidebar"] + div {{
+    /* Override Streamlit's inline margin-left on the main area */
+    .stApp [data-testid="stSidebar"] ~ div,
+    .stApp [data-testid="stSidebar"] + div,
+    .stApp [data-testid="stSidebar"] ~ section {{
         margin-left: 0 !important;
     }}
 
