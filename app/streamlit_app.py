@@ -68,39 +68,63 @@ st.markdown(f"""
     }}
 
     /* ── Toggle button: ALWAYS visible, both states ── */
-    button[data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stSidebarCollapseButton"],
+    /* Target every layer of the Streamlit sidebar control */
+    [data-testid="collapsedControl"],
+    [data-testid="collapsedControl"] > * ,
     [data-testid="stSidebarCollapsedControl"],
-    [data-testid="collapsedControl"] {{
+    button[data-testid="stSidebarCollapsedControl"],
+    button[data-testid="stSidebarCollapseButton"] {{
         display: flex !important;
         align-items: center;
         justify-content: center;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
-        z-index: 1001;
+    }}
+    /* Pin the outer wrapper fixed top-left */
+    [data-testid="collapsedControl"] {{
         position: fixed !important;
         top: 0.55rem;
         left: 0.5rem;
+        z-index: 1001;
+    }}
+    /* Style the clickable icon inside */
+    [data-testid="collapsedControl"] [data-testid="stIconMaterial"],
+    button[data-testid="stSidebarCollapseButton"] {{
         min-width: 36px; min-height: 36px;
         border-radius: 8px;
         background: {CARD} !important;
         border: 1px solid {BORDER} !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-        overflow: hidden;
+        cursor: pointer;
+        color: {TEXT} !important;
+        font-size: 1.2rem;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
     }}
-    /* Hide the label text inside the toggle so only the arrow icon shows */
+    /* The close button inside the open sidebar — also pinned */
+    button[data-testid="stSidebarCollapseButton"] {{
+        position: fixed !important;
+        top: 0.55rem;
+        left: 0.5rem;
+        z-index: 1002;
+    }}
+    /* Hide any label text — only arrow/icon shows */
     button[data-testid="stSidebarCollapsedControl"] p,
-    button[data-testid="stSidebarCollapseButton"] p {{
+    button[data-testid="stSidebarCollapseButton"] p,
+    [data-testid="collapsedControl"] p {{
         display: none !important;
     }}
-    /* Open arrow points → (right, towards sidebar) */
+    /* Open arrow: default direction (→) */
+    [data-testid="collapsedControl"] svg,
     button[data-testid="stSidebarCollapsedControl"] svg {{
         transform: rotate(0deg);
         transition: transform 0.25s ease;
     }}
-    /* Close arrow points ← (left, away from sidebar) — flipped 180° */
-    button[data-testid="stSidebarCollapseButton"] svg {{
+    /* Close arrow: flipped (←) */
+    button[data-testid="stSidebarCollapseButton"] svg,
+    button[data-testid="stSidebarCollapseButton"] [data-testid="stIconMaterial"] {{
         transform: rotate(180deg);
         transition: transform 0.25s ease;
     }}
