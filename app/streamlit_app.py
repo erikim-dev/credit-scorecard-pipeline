@@ -153,6 +153,94 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
+    /* ══════════════════════════════════════════════════════════════
+       MOBILE-FIRST RESPONSIVE  (≤ 768 px)
+       ══════════════════════════════════════════════════════════════ */
+    @media (max-width: 768px) {{
+
+        /* ── Layout: less padding, more vertical space ── */
+        .block-container {{
+            padding-top: 0.6rem !important;
+            padding-left: 0.65rem !important;
+            padding-right: 0.65rem !important;
+            padding-bottom: 0.5rem !important;
+        }}
+
+        /* ── Typography: slightly smaller on small screens ── */
+        h1 {{ font-size: 1.45rem !important; }}
+        h2 {{ font-size: 1.15rem !important; }}
+        h3, h5 {{ font-size: 1rem !important; }}
+
+        /* ── Metric cards: compact 2-col grid ── */
+        [data-testid="stHorizontalBlock"] {{
+            flex-wrap: wrap !important;
+            gap: 0.45rem !important;
+        }}
+        [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {{
+            flex: 1 1 calc(50% - 0.5rem) !important;
+            min-width: calc(50% - 0.5rem) !important;
+        }}
+        [data-testid="stMetric"] {{
+            padding: 10px 12px !important;
+            border-radius: 8px !important;
+        }}
+        [data-testid="stMetricValue"] {{
+            font-size: 1.25rem !important;
+        }}
+        [data-testid="stMetricLabel"] {{
+            font-size: 0.68rem !important;
+        }}
+
+        /* ── Tabs: horizontal scroll, no wrap ── */
+        .stTabs [data-baseweb="tab-list"] {{
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            flex-wrap: nowrap !important;
+        }}
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {{ display: none; }}
+        .stTabs [data-baseweb="tab"] {{
+            padding: 8px 14px !important;
+            font-size: 0.82rem !important;
+            white-space: nowrap !important;
+        }}
+
+        /* ── Buttons: bigger touch targets ── */
+        .stButton > button {{
+            min-height: 44px !important;
+            font-size: 0.88rem !important;
+        }}
+
+        /* ── Selectboxes / inputs: full width ── */
+        [data-testid="stSelectbox"],
+        [data-testid="stNumberInput"],
+        [data-testid="stSlider"] {{
+            width: 100% !important;
+        }}
+
+        /* ── Charts: reduce default height overhead ── */
+        .js-plotly-plot {{ max-width: 100% !important; }}
+
+        /* ── Dataframes: horizontal scroll ── */
+        .stDataFrame {{ overflow-x: auto !important; -webkit-overflow-scrolling: touch; }}
+
+        /* ── Footer: stack vertically ── */
+        .mobile-footer-stack {{
+            display: flex; flex-direction: column; gap: 0.5rem;
+        }}
+    }}
+
+    /* ── Tablet tweaks (769 – 1024 px) ── */
+    @media (min-width: 769px) and (max-width: 1024px) {{
+        .block-container {{
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }}
+        [data-testid="stMetricValue"] {{
+            font-size: 1.45rem !important;
+        }}
+    }}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1640,37 +1728,36 @@ elif page == "Data Explorer":
 
 
 # ---------------------------------------------------------------------------
-# Footer with model metadata
+# Footer with model metadata (responsive)
 # ---------------------------------------------------------------------------
 st.divider()
-footer_col1, footer_col2, footer_col3 = st.columns(3)
 
-with footer_col1:
-    st.markdown(f"""
-    <small style="color: {MUTED};">
-    <b>Models</b><br>
-    Scorecard (Champion)<br>
-    XGBoost, LightGBM, Stacking
+# Wrap footer in a div that stacks on mobile via CSS class
+st.markdown(f"""
+<div class="mobile-footer-stack" style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+  <div style="flex:1; min-width:180px;">
+    <small style="color:{MUTED};">
+      <b>Models</b><br>
+      Scorecard (Champion)<br>
+      XGBoost, LightGBM, Stacking
     </small>
-    """, unsafe_allow_html=True)
-
-with footer_col2:
-    st.markdown(f"""
-    <small style="color: {MUTED};">
-    <b>Training Data</b><br>
-    Features: 300<br>
-    Last Updated: Feb 28, 2026
+  </div>
+  <div style="flex:1; min-width:180px;">
+    <small style="color:{MUTED};">
+      <b>Training Data</b><br>
+      Features: 300<br>
+      Last Updated: Feb 28, 2026
     </small>
-    """, unsafe_allow_html=True)
-
-with footer_col3:
-    st.markdown(f"""
-    <small style="color: {MUTED};">
-    <b>Performance</b><br>
-    Best AUC: 0.7903 (Stacking)<br>
-    Gini: 0.5806
+  </div>
+  <div style="flex:1; min-width:180px;">
+    <small style="color:{MUTED};">
+      <b>Performance</b><br>
+      Best AUC: 0.7903 (Stacking)<br>
+      Gini: 0.5806
     </small>
-    """, unsafe_allow_html=True)
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown(f"""
 <small style="color: {MUTED}; text-align: center; display: block; margin-top: 2rem;">
