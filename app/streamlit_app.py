@@ -931,6 +931,23 @@ elif page == "Model Analytics":
     test_df = load_analytics_sample()   # 20K stratified sample — fast & sufficient
     artefacts = load_models()
 
+    # Prepare hold-out split ONCE for all tabs
+    # Object columns are label-encoded → int so tree models accept them
+    _Xh = _yh = _tsplit = None
+    if test_df is not None and "TARGET" in test_df.columns:
+        from sklearn.model_selection import train_test_split
+        exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
+        fc = [c for c in test_df.columns if c not in exclude]
+        X = test_df[fc].copy()
+        for col in X.select_dtypes(include="object").columns:
+            X[col] = X[col].astype("category").cat.codes
+        y = test_df["TARGET"]
+        _, _Xh, _, _yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        # tsplit keeps ALL columns (including non-numeric) for demographic analysis
+        _, _tsplit, _, _ = train_test_split(
+            test_df, test_df["TARGET"], test_size=0.2, random_state=42, stratify=test_df["TARGET"],
+        )
+
     tab_perf, tab_roc, tab_dist, tab_stability, tab_fairness = st.tabs([
         "Performance", "ROC Curves", "Distributions", "Stability", "Fairness",
     ])
@@ -985,9 +1002,9 @@ elif page == "Model Analytics":
                 st.markdown("##### Overfitting Check")
                 cv_lu = {
                     "Champion (Scorecard)": 0.7659, "Scorecard (Champion)": 0.7659,
-                    "XGBoost": 0.7886, "XGBoost (Challenger)": 0.7886,
-                    "LightGBM DART": 0.7736,
-                    "Stacking Ensemble": 0.7886, "Stacking": 0.7886,
+                    "Challenger 1 (XGBoost)": 0.7886, "XGBoost": 0.7886, "XGBoost (Challenger)": 0.7886,
+                    "Challenger 2 (LightGBM DART)": 0.7736, "LightGBM DART": 0.7736,
+                    "Challenger 3 (Stacking)": 0.7886, "Stacking Ensemble": 0.7886, "Stacking": 0.7886,
                 }
                 ov = []
                 for _, row in mdf.iterrows():
@@ -1007,21 +1024,13 @@ elif page == "Model Analytics":
                 
                 # Threshold exploration
                 st.markdown("##### Confusion Matrix at Different Thresholds")
-                if test_df is not None and "xgb" in artefacts:
-                    from sklearn.model_selection import train_test_split
-                    exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-                    fc = [c for c in test_df.columns if c not in exclude]
-                    X = test_df[fc]; y = test_df["TARGET"]
-                    _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-                
-                if artefacts.get("xgb") is not None:
+                if _Xh is not None and artefacts.get("xgb") is not None:
                     try:
-                        yp = artefacts["xgb"].predict_proba(Xh)[:, 1]
-                        
+                        yp = artefacts["xgb"].predict_proba(_Xh)[:, 1]
                         threshold_vals = [0.3, 0.4, 0.5, 0.6, 0.7]
                         cm_data = []
                         for thresh in threshold_vals:
-                            tn, fp, fn, tp = confusion_matrix_at_threshold(yh, yp, thresh)
+                            tn, fp, fn, tp = confusion_matrix_at_threshold(_yh, yp, thresh)
                             sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
                             specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
                             cm_data.append({
@@ -1033,7 +1042,7 @@ elif page == "Model Analytics":
                             })
                         st.dataframe(pd.DataFrame(cm_data), use_container_width=True, hide_index=True)
                     except Exception as e:
-                        st.caption(f"Confusion matrix error: {str(e)[:50]}")
+                        st.caption(f"Confusion matrix error: {str(e)[:80]}")
                 else:
                     st.info("Test data or XGBoost model needed for threshold analysis.")
             else:
@@ -1044,22 +1053,17 @@ elif page == "Model Analytics":
     # -- tab: ROC ---------------------------------------------------------
     with tab_roc:
         st.markdown("<small>Model ROC curves and AUC scores on hold-out data. Higher is better.</small>", unsafe_allow_html=True)
-        if test_df is not None:
+        if _Xh is not None:
             if not artefacts:
                 st.error("Models not found. Ensure all .pkl files are in the `models/` directory.")
             else:
                 try:
                     from sklearn.metrics import roc_curve, roc_auc_score as auc_score
-                    from sklearn.model_selection import train_test_split
 
-                    exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-                    fc = [c for c in test_df.columns if c not in exclude]
-                    X = test_df[fc]; y = test_df["TARGET"]
-                    _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
+                    Xh, yh = _Xh, _yh
                     fig_roc = go.Figure()
                     curves_added = 0
-                    
+
                     cfgs = [
                         ("XGBoost", artefacts.get("xgb"), C1),
                         ("LightGBM DART", artefacts.get("lgb"), C3),
@@ -1076,7 +1080,7 @@ elif page == "Model Analytics":
                                 ))
                                 curves_added += 1
                             except Exception as e:
-                                st.caption(f"Could not generate ROC for {nm}: {str(e)[:50]}")
+                                st.caption(f"Could not generate ROC for {nm}: {str(e)[:80]}")
 
                     if "stacking" in artefacts and isinstance(artefacts["stacking"], dict):
                         try:
@@ -1093,7 +1097,7 @@ elif page == "Model Analytics":
                             ))
                             curves_added += 1
                         except Exception as e:
-                            st.caption(f"Could not generate ROC for Stacking: {str(e)[:50]}")
+                            st.caption(f"Could not generate ROC for Stacking: {str(e)[:80]}")
 
                     if "scorecard" in artefacts and "woe_encoder" in artefacts:
                         try:
@@ -1113,7 +1117,7 @@ elif page == "Model Analytics":
                             ))
                             curves_added += 1
                         except Exception as e:
-                            st.caption(f"Could not generate ROC for Scorecard: {str(e)[:50]}")
+                            st.caption(f"Could not generate ROC for Scorecard: {str(e)[:80]}")
 
                     if curves_added > 0:
                         fig_roc.add_trace(go.Scatter(
@@ -1137,13 +1141,8 @@ elif page == "Model Analytics":
     # -- tab: Distributions -----------------------------------------------
     with tab_dist:
         st.markdown("<small>Predicted probability distributions by actual outcome. Clear separation indicates good model discrimination.</small>", unsafe_allow_html=True)
-        if test_df is not None and "xgb" in artefacts:
-            from sklearn.model_selection import train_test_split
-
-            exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-            fc = [c for c in test_df.columns if c not in exclude]
-            X = test_df[fc]; y = test_df["TARGET"]
-            _, Xh, _, yh = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+        if _Xh is not None and "xgb" in artefacts:
+            Xh, yh = _Xh, _yh
 
             # model selector for distributions
             dist_model_name = st.selectbox(
@@ -1261,16 +1260,11 @@ elif page == "Model Analytics":
         st.markdown("##### Fairness Audit")
         st.caption("AUC consistency across demographic segments")
 
-        if test_df is not None and "xgb" in artefacts:
+        if _Xh is not None and _tsplit is not None and "xgb" in artefacts:
             from sklearn.metrics import roc_auc_score as auc_fn
-            from sklearn.model_selection import train_test_split
 
-            _, tsplit, _, _ = train_test_split(
-                test_df, test_df["TARGET"], test_size=0.2, random_state=42, stratify=test_df["TARGET"],
-            )
-            exclude = {"SK_ID_CURR", "SK_ID_PREV", "TARGET"}
-            fc = [c for c in tsplit.columns if c not in exclude]
-            Xh = tsplit[fc]; yh = tsplit["TARGET"]
+            tsplit = _tsplit
+            Xh, yh = _Xh, _yh
             yp = artefacts["xgb"].predict_proba(Xh)[:, 1]
 
             fair = []
