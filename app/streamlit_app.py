@@ -98,11 +98,23 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
-    /* ensure sidebar control button is always visible */
-    section[data-testid="stSidebar"] > div:first-child {{
-        position: sticky;
+    /* keep sidebar arrow control always visible and sticky */
+    section[data-testid="stSidebar"] {{
+        position: fixed;
+        left: 0;
         top: 0;
+        height: 100vh;
         z-index: 100;
+    }}
+    section[data-testid="stSidebar"]::before {{
+        content: '';
+        display: block;
+        height: 100%;
+    }}
+    button[kind="secondary"] {{
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 101 !important;
     }}
 
 </style>
@@ -1072,26 +1084,26 @@ elif page == "Model Analytics":
 # PAGE: Data Explorer
 # ===================================================================
 elif page == "Data Explorer":
-    st.title("Data Explorer")
+    st.title("📊 Data Explorer")
     st.caption("Interactive exploration of the training dataset")
 
     test_df = load_test_data()
 
     if test_df is not None:
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Rows", f"{len(test_df):,}")
-        m2.metric("Features", f"{test_df.shape[1] - 2}")
-        m3.metric("Default Rate", f"{test_df['TARGET'].mean():.2%}")
-        m4.metric("Missing Columns", f"{(test_df.isnull().any()).sum()}")
+        m1.metric("📈 Rows", f"{len(test_df):,}")
+        m2.metric("📋 Features", f"{test_df.shape[1] - 2}")
+        m3.metric("⚠️ Default Rate", f"{test_df['TARGET'].mean():.2%}")
+        m4.metric("❌ Missing Columns", f"{(test_df.isnull().any()).sum()}")
 
-        tab_ov, tab_corr, tab_feat = st.tabs(["Overview", "Correlations", "Feature Drill-Down"])
+        tab_ov, tab_corr, tab_feat = st.tabs(["📈 Overview", "🔗 Correlations", "🔍 Feature Drill-Down"])
 
         with tab_ov:
-            st.markdown("##### Sample Data")
+            st.markdown("##### 📊 Sample Data")
             n_rows = st.slider("Rows to display", 10, 500, 100, 10, key="ov_rows")
             st.dataframe(test_df.head(n_rows), use_container_width=True, height=400)
 
-            st.markdown("##### Column Statistics")
+            st.markdown("##### 📑 Column Statistics")
             desc = test_df.describe().T
             desc["missing_pct"] = test_df.isnull().mean()
             st.dataframe(
