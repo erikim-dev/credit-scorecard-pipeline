@@ -812,6 +812,8 @@ elif page == "Model Analytics":
 
     # -- tab: ROC ---------------------------------------------------------
     with tab_roc:
+        st.markdown("<small>Model ROC curves and AUC scores on hold-out data. Higher is better.</small>", unsafe_allow_html=True)
+        st.markdown("""<small>Model ROC curves and AUC scores on hold-out data. Higher is better.</small>""", unsafe_allow_html=True)
         if test_df is not None and artefacts:
             from sklearn.metrics import roc_curve, roc_auc_score as auc_score
             from sklearn.model_selection import train_test_split
@@ -890,6 +892,8 @@ elif page == "Model Analytics":
 
     # -- tab: Distributions -----------------------------------------------
     with tab_dist:
+        st.markdown("<small>Predicted probability distributions by actual outcome. Clear separation indicates good model discrimination.</small>", unsafe_allow_html=True)
+        st.markdown("""<small>Predicted probability distributions by actual outcome. Clear separation indicates good model discrimination.</small>""", unsafe_allow_html=True)
         if test_df is not None and "xgb" in artefacts:
             from sklearn.model_selection import train_test_split
 
@@ -980,6 +984,7 @@ elif page == "Model Analytics":
 
     # -- tab: Stability ---------------------------------------------------
     with tab_stability:
+        st.markdown("<small>Population Stability Index (PSI) measures data drift over time. Values below 0.10 indicate stability.</small>", unsafe_allow_html=True)
         st.markdown("##### Population Stability Index")
 
         psi_path = ROOT / "reports" / "psi_report.csv"
@@ -1163,7 +1168,7 @@ elif page == "Data Explorer":
                 )
                 st.plotly_chart(fig_box, use_container_width=True)
     else:
-        st.warning("📊 **Data not available**")
+        st.warning("**Data not available**")
         st.markdown("""
 The training dataset has not been generated yet. To proceed:
 
