@@ -1,6 +1,6 @@
 # Credit Scorecard: Champion/Challenger Framework
 
-**Live Dashboard:** [Streamlit App](https://credit-scorecard-project.streamlit.app) | **API:** FastAPI (local / Docker) | **Tracking:** MLflow
+**Live Dashboard:** [Streamlit App](https://credit-scorecard-pipeline.streamlit.app) | **API:** FastAPI (local / Docker) | **Tracking:** MLflow
 
 ---
 
@@ -144,7 +144,7 @@ credit-scorecard-project/
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/your-username/credit-scorecard-project.git
+git clone https://github.com/erikim-dev/credit-scorecard-pipeline.git
 cd credit-scorecard-project
 pip install -r requirements.txt
 
@@ -266,7 +266,7 @@ If you prefer a lighter repository, we can remove model binaries from the main b
 
 | Service | Platform | URL |
 |---------|----------|-----|
-| Dashboard | Streamlit Cloud | [credit-scorecard-project.streamlit.app](https://credit-scorecard-project.streamlit.app) |
+| Dashboard | Streamlit Cloud | [credit-scorecard-pipeline.streamlit.app](https://credit-scorecard-pipeline.streamlit.app) |
 | Scoring API | Docker / local | `http://localhost:8000/docs` |
 | MLflow UI | Local | `http://localhost:5000` (via `make mlflow-ui`) |
 
