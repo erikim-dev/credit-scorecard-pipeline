@@ -65,7 +65,7 @@ st.markdown(f"""
         transition: transform 0.3s ease, visibility 0s linear 0.3s,
                     box-shadow 0.3s ease !important;
     }}
-    /* ── Collapsed / default: off-screen ── */
+    /* ── Collapsed / default: off-screen via every possible method ── */
     section[data-testid="stSidebar"]:not([aria-expanded="true"]) {{
         transform: translateX(-100%) !important;
         left: -100vw !important;
@@ -73,8 +73,9 @@ st.markdown(f"""
         min-width: 0 !important;
         max-width: 0 !important;
         overflow: hidden !important;
+        visibility: hidden !important;
+        clip-path: inset(0 100% 0 0) !important;
         box-shadow: none !important;
-        /* Do NOT set visibility:hidden — it hides the toggle button child too */
     }}
     /* ── Expanded: slide in as overlay ── */
     section[data-testid="stSidebar"][aria-expanded="true"] {{
@@ -108,45 +109,15 @@ st.markdown(f"""
         margin-left: 0 !important;
     }}
 
-    /* ── Hide ALL Streamlit native sidebar toggle buttons ── */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stSidebarCollapseButton"] {{
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important; height: 0 !important;
-        overflow: hidden !important;
-        pointer-events: none !important;
-    }}
-
-    /* ── Custom toggle button: permanently fixed left edge ── */
-    #custom-sidebar-toggle {{
-        position: fixed !important;
-        top: 0.55rem;
-        left: 0.5rem;
-        z-index: 99999 !important;
-        width: 36px; height: 36px;
-        border-radius: 8px;
-        background: {CARD};
-        border: 1px solid {BORDER};
-        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    /* ── Dim overlay behind sidebar when open ── */
+    #sidebar-overlay {{
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.35);
+        z-index: 998;
         cursor: pointer;
-        color: {TEXT};
-        font-size: 1.3rem;
-        display: flex !important;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.25s ease, background 0.2s ease;
-        user-select: none;
-        -webkit-tap-highlight-color: transparent;
-    }}
-    #custom-sidebar-toggle:hover {{
-        background: {BORDER};
-    }}
-    #custom-sidebar-toggle.open {{
-        /* When sidebar is open, rotate arrow to point left */
-        transform: rotate(180deg);
     }}
 
     /* ── Responsive sidebar width ── */
@@ -308,92 +279,87 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# Custom sidebar toggle — inject a permanent button into the parent document
+# JS — collapse sidebar on load + close on click-outside / Esc
 import streamlit.components.v1 as _components
 _components.html("""
 <script>
 (function() {
     var doc = window.parent.document;
 
-    // ── Create the custom toggle button (only once) ──
-    if (!doc.getElementById('custom-sidebar-toggle')) {
-        var btn = doc.createElement('div');
-        btn.id = 'custom-sidebar-toggle';
-        btn.innerHTML = '&#9776;';  // hamburger ☰
-        btn.title = 'Toggle menu';
-        doc.body.appendChild(btn);
-    }
-
-    var toggleBtn = doc.getElementById('custom-sidebar-toggle');
-    var sidebarOpen = false;
-
     function getSidebar() {
         return doc.querySelector('section[data-testid="stSidebar"]');
     }
 
-    function hideSidebar() {
+    function isOpen() {
         var sb = getSidebar();
-        if (!sb) return;
-        sidebarOpen = false;
-        sb.style.setProperty('transform', 'translateX(-100%)', 'important');
-        sb.style.setProperty('width', '0px', 'important');
-        sb.style.setProperty('min-width', '0px', 'important');
-        sb.style.setProperty('max-width', '0px', 'important');
-        sb.style.setProperty('overflow', 'hidden', 'important');
-        sb.style.setProperty('position', 'fixed', 'important');
-        sb.style.setProperty('box-shadow', 'none', 'important');
-        sb.setAttribute('aria-expanded', 'false');
-        toggleBtn.classList.remove('open');
-        toggleBtn.innerHTML = '&#9776;';  // ☰
+        return sb && sb.getAttribute('aria-expanded') === 'true';
     }
 
-    function showSidebar() {
+    function clickCollapseBtn() {
         var sb = getSidebar();
-        if (!sb) return;
-        sidebarOpen = true;
-        sb.style.setProperty('transform', 'translateX(0)', 'important');
-        sb.style.setProperty('width', 'fit-content', 'important');
-        sb.style.setProperty('min-width', '220px', 'important');
-        sb.style.setProperty('max-width', '320px', 'important');
-        sb.style.setProperty('overflow', 'visible', 'important');
-        sb.style.setProperty('visibility', 'visible', 'important');
-        sb.style.setProperty('position', 'fixed', 'important');
-        sb.style.setProperty('box-shadow', '4px 0 24px rgba(0,0,0,0.45)', 'important');
-        sb.setAttribute('aria-expanded', 'true');
-        toggleBtn.classList.add('open');
-        toggleBtn.innerHTML = '&#10005;';  // ✕
+        if (!sb) return false;
+        var btn = sb.querySelector('button[data-testid="stSidebarCollapseButton"]')
+               || sb.querySelector('button[kind="header"]')
+               || sb.querySelector('button');
+        if (btn) { btn.click(); return true; }
+        return false;
     }
 
-    function toggle() {
-        if (sidebarOpen) { hideSidebar(); } else { showSidebar(); }
-    }
-
-    toggleBtn.addEventListener('click', toggle);
-
-    // Hide sidebar on initial load
-    var bootAttempts = 0;
-    var bootIv = setInterval(function() {
-        var sb = getSidebar();
-        if (sb) {
-            hideSidebar();
-            clearInterval(bootIv);
+    function getOrCreateOverlay() {
+        var ov = doc.getElementById('sidebar-overlay');
+        if (!ov) {
+            ov = doc.createElement('div');
+            ov.id = 'sidebar-overlay';
+            doc.body.appendChild(ov);
         }
-        if (++bootAttempts > 50) clearInterval(bootIv);
-    }, 150);
+        return ov;
+    }
 
-    // Watch for Streamlit re-renders that might reset the sidebar
-    var observer = new MutationObserver(function() {
-        var sb = getSidebar();
-        if (!sb) return;
-        // If we want it hidden but Streamlit re-expanded it, re-hide
-        if (!sidebarOpen && sb.getAttribute('aria-expanded') === 'true') {
-            hideSidebar();
+    function showOverlay() {
+        var ov = getOrCreateOverlay();
+        ov.style.display = 'block';
+    }
+    function hideOverlay() {
+        var ov = getOrCreateOverlay();
+        ov.style.display = 'none';
+    }
+
+    function syncOverlay() {
+        if (isOpen()) { showOverlay(); } else { hideOverlay(); }
+    }
+
+    // Close sidebar when clicking the overlay (i.e. outside sidebar)
+    getOrCreateOverlay().addEventListener('click', function() {
+        if (isOpen()) clickCollapseBtn();
+        hideOverlay();
+    });
+
+    // Close sidebar on Escape key
+    doc.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isOpen()) {
+            clickCollapseBtn();
+            hideOverlay();
         }
     });
-    setTimeout(function() {
+
+    // Phase 1: collapse sidebar on initial page load
+    var bootAttempts = 0;
+    var bootIv = setInterval(function() {
+        if (isOpen()) {
+            clickCollapseBtn();
+        }
+        if (!isOpen() || ++bootAttempts > 40) clearInterval(bootIv);
+    }, 200);
+
+    // Phase 2: watch aria-expanded to sync the overlay
+    function startObserver() {
         var sb = getSidebar();
-        if (sb) observer.observe(sb, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
-    }, 1000);
+        if (!sb) return;
+        new MutationObserver(syncOverlay)
+            .observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
+    }
+    setTimeout(startObserver, 500);
+    setTimeout(startObserver, 2000);
 })();
 </script>
 """, height=0)
