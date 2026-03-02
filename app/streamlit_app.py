@@ -106,10 +106,19 @@ st.markdown(f"""
     }}
 </style>
 
-<div id="reveal-sidebar">Show sidebar</div>
+<div id="reveal-sidebar">»»</div>
 <script>
 (function(){{
     const btn = document.getElementById('reveal-sidebar');
+    function isCollapsed(){{
+        // If Streamlit exposes the collapsed control, assume sidebar is collapsed
+        return !!document.querySelector('[data-testid="collapsedControl"]') || !!document.querySelector('button[title="Open sidebar"]') || !!document.querySelector('button[aria-label="Open navigation"]') || !!document.querySelector('button[aria-label="Show sidebar"]');
+    }}
+    function updateIcon(){{
+        try{{
+            btn.innerText = isCollapsed() ? '»»' : '««';
+        }}catch(e){{}}
+    }}
     function toggleSidebar(){{
         const selectors = [
             '[data-testid="collapsedControl"]',
@@ -119,11 +128,18 @@ st.markdown(f"""
         ];
         for(const s of selectors){{
             const el = document.querySelector(s);
-            if(el){{ el.click(); return; }}
+            if(el){{ el.click(); setTimeout(updateIcon, 250); return; }}
         }}
-        try{{ const p = window.parent.document.querySelector('[data-testid="collapsedControl"]'); p && p.click(); }}catch(e){{}}
+        try{{ const p = window.parent.document.querySelector('[data-testid="collapsedControl"]'); if(p){{ p.click(); setTimeout(updateIcon, 250); }} }}catch(e){{}}
     }}
     btn && btn.addEventListener('click', toggleSidebar);
+
+    // Observe DOM changes to update icon when Streamlit toggles sidebar
+    const observer = new MutationObserver(function(){{ updateIcon(); }});
+    observer.observe(document.body, {{ childList: true, subtree: true }});
+
+    // initial icon state
+    setTimeout(updateIcon, 300);
 }})();
 </script>
 """, unsafe_allow_html=True)
