@@ -41,7 +41,50 @@ SELECT
         WHEN SUM(ip.AMT_INSTALMENT) > 0
         THEN SUM(ip.AMT_PAYMENT) / SUM(ip.AMT_INSTALMENT)
         ELSE NULL
-    END                                                  AS payment_to_due_ratio
+    END                                                  AS payment_to_due_ratio,
+
+    -- ── Variability ─────────────────────────────────────────
+    STDDEV(ip.AMT_PAYMENT)                               AS std_payment_amount,
+    STDDEV(ip.DAYS_ENTRY_PAYMENT - ip.DAYS_INSTALMENT)   AS std_days_late,
+
+    -- ── Recency windows ─────────────────────────────────────
+    SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365
+              AND ip.DAYS_ENTRY_PAYMENT > ip.DAYS_INSTALMENT
+             THEN 1 ELSE 0 END)                          AS late_payments_last_12m,
+    SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365
+             THEN 1 ELSE 0 END)                          AS total_installments_last_12m,
+    CASE
+        WHEN SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365 THEN 1 ELSE 0 END) > 0
+        THEN SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365
+                       AND ip.DAYS_ENTRY_PAYMENT > ip.DAYS_INSTALMENT
+                      THEN 1 ELSE 0 END) * 1.0
+             / SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365 THEN 1 ELSE 0 END)
+        ELSE 0
+    END                                                  AS late_ratio_last_12m,
+
+    -- ── Trend: recent vs older late ratio ────────────────────
+    CASE
+        WHEN SUM(CASE WHEN ip.DAYS_INSTALMENT < -365 THEN 1 ELSE 0 END) > 0
+        THEN (
+            SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365
+                      AND ip.DAYS_ENTRY_PAYMENT > ip.DAYS_INSTALMENT
+                     THEN 1 ELSE 0 END) * 1.0
+            / NULLIF(SUM(CASE WHEN ip.DAYS_INSTALMENT >= -365 THEN 1 ELSE 0 END), 0)
+        ) - (
+            SUM(CASE WHEN ip.DAYS_INSTALMENT < -365
+                      AND ip.DAYS_ENTRY_PAYMENT > ip.DAYS_INSTALMENT
+                     THEN 1 ELSE 0 END) * 1.0
+            / SUM(CASE WHEN ip.DAYS_INSTALMENT < -365 THEN 1 ELSE 0 END)
+        )
+        ELSE NULL
+    END                                                  AS late_ratio_trend,
+
+    -- ── Early payment signal ─────────────────────────────────
+    SUM(CASE WHEN ip.DAYS_ENTRY_PAYMENT < ip.DAYS_INSTALMENT - 5
+             THEN 1 ELSE 0 END)                          AS early_payment_count,
+    AVG(CASE WHEN ip.DAYS_ENTRY_PAYMENT <= ip.DAYS_INSTALMENT
+             THEN ip.DAYS_INSTALMENT - ip.DAYS_ENTRY_PAYMENT
+             ELSE NULL END)                              AS avg_days_early
 
 FROM installments_payments ip
 JOIN previous_application prev

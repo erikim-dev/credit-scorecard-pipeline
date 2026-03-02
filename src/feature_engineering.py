@@ -68,8 +68,52 @@ def build_features(raw_dir: pathlib.Path, out_dir: pathlib.Path):
     # ── Missing-value indicators ─────────────────────────────
     merged = add_missing_indicators(merged)
 
-    # ── Target-encode high-cardinality categoricals ──────────
-    merged = target_encode_categoricals(merged, target_col="TARGET")
+    # ── Frequency encoding for categoricals ──────────────────
+    merged = add_frequency_encoding(merged)
+
+    # ── Cross-table risk aggregates ──────────────────────────
+    merged = add_cross_table_features(merged)
+
+    # NOTE: Target encoding removed from batch pipeline to prevent
+    # data leakage. Tree models (XGB/LGB) handle categoricals via
+    # category codes; the scorecard uses per-fold WoE encoding.
+    # If target encoding is needed, use fold-aware encoding inside
+    # the training loop (see train.py).
+
+    # Drop raw object columns — tree models use numeric features only
+    cat_cols = merged.select_dtypes(include=["object", "category"]).columns.tolist()
+    # Also catch extension dtypes that cannot be used directly by tree models
+    for col in merged.columns:
+        dtype_str = str(merged[col].dtype).lower()
+        if dtype_str in ("object", "category", "boolean", "string"):
+            if col not in cat_cols:
+                cat_cols.append(col)
+        elif hasattr(merged[col].dtype, "kind") and merged[col].dtype.kind in ("O", "U", "S"):
+            if col not in cat_cols:
+                cat_cols.append(col)
+    # Explicit safety: check every column for non-numeric content
+    for col in list(merged.columns):
+        if col in ("SK_ID_CURR", "TARGET"):
+            continue
+        if col not in cat_cols:
+            try:
+                pd.to_numeric(merged[col].dropna(), errors="raise")
+            except (ValueError, TypeError):
+                cat_cols.append(col)
+    print(f"  Dropping {len(cat_cols)} categorical/boolean columns")
+    # Convert boolean extension type columns to int before drop (keep as 0/1 features)
+    bool_cols = [c for c in cat_cols if str(merged[c].dtype).lower() == "boolean"]
+    for col in bool_cols:
+        merged[col] = merged[col].astype("Int64").astype("float64")
+        cat_cols.remove(col)
+        print(f"    Converted {col} (boolean -> float)")
+    merged = merged.drop(columns=cat_cols)
+
+    # Final safety: force all columns to numeric, drop any stragglers
+    for col in merged.columns:
+        if col in ("SK_ID_CURR", "TARGET"):
+            continue
+        merged[col] = pd.to_numeric(merged[col], errors="coerce")
 
     # ── Save ─────────────────────────────────────────────────
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -192,6 +236,25 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         if "EXT_SOURCE_3" in df.columns:
             df["EXT_SRC3_x_AGE"] = df["EXT_SOURCE_3"] * df["AGE_YEARS"]
 
+        # Polynomial features (capture non-linear risk surface)
+        if "EXT_SOURCE_2" in df.columns:
+            df["EXT_SRC2_SQ"] = df["EXT_SOURCE_2"] ** 2
+            df["EXT_SRC2_CB"] = df["EXT_SOURCE_2"] ** 3
+        if "EXT_SOURCE_3" in df.columns:
+            df["EXT_SRC3_SQ"] = df["EXT_SOURCE_3"] ** 2
+        if "EXT_SOURCE_1" in df.columns:
+            df["EXT_SRC1_SQ"] = df["EXT_SOURCE_1"] ** 2
+        # Triple interaction
+        if all(f"EXT_SOURCE_{i}" in df.columns for i in [1, 2, 3]):
+            df["EXT_SRC_PROD"] = df["EXT_SOURCE_1"] * df["EXT_SOURCE_2"] * df["EXT_SOURCE_3"]
+        # Weighted EXT score (EXT2 is strongest predictor)
+        if all(f"EXT_SOURCE_{i}" in df.columns for i in [1, 2, 3]):
+            df["EXT_SOURCE_WEIGHTED"] = (
+                0.2 * df["EXT_SOURCE_1"]
+                + 0.5 * df["EXT_SOURCE_2"]
+                + 0.3 * df["EXT_SOURCE_3"]
+            )
+
     # ── Document count (proxy for documentation completeness) ─
     doc_cols = [c for c in df.columns if c.startswith("FLAG_DOCUMENT_")]
     if doc_cols:
@@ -211,6 +274,57 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     df["PAYMENT_RATE"] = df["AMT_ANNUITY"] / (df["AMT_CREDIT"] + 1)
     # How much of credit goes beyond goods price (fees/interest proxy)
     df["CREDIT_OVERCHARGE"] = (df["AMT_CREDIT"] - df["AMT_GOODS_PRICE"]) / (df["AMT_GOODS_PRICE"] + 1)
+
+    # ── Income-loan cross features ───────────────────────────
+    df["ANNUITY_x_EMPLOYMENT"] = df["AMT_ANNUITY"] * df.get("EMPLOYMENT_YEARS", 0)
+    df["INCOME_x_EXT2"] = df["AMT_INCOME_TOTAL"] * df.get("EXT_SOURCE_2", 0.5)
+    df["CREDIT_x_AGE"] = df["AMT_CREDIT"] * df.get("AGE_YEARS", 40)
+
+    return df
+
+
+def add_frequency_encoding(df: pd.DataFrame) -> pd.DataFrame:
+    """Frequency-encode categorical columns before dropping them."""
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    for col in cat_cols:
+        freq = df[col].value_counts(normalize=True)
+        df[f"FREQ_{col}"] = df[col].map(freq).astype(float).fillna(0)
+    return df
+
+
+def add_cross_table_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Cross-table risk aggregates combining bureau, CC, installment signals."""
+    # Worst DPD across all sub-tables
+    dpd_cols = [c for c in df.columns if "dpd" in c.lower() and "max" in c.lower()]
+    if dpd_cols:
+        df["WORST_DPD_ALL"] = df[dpd_cols].max(axis=1)
+
+    # Total DPD months across all sub-tables
+    dpd_month_cols = [c for c in df.columns if "months_with_dpd" in c.lower() or "dpd_count" in c.lower()]
+    if dpd_month_cols:
+        df["TOTAL_DPD_MONTHS"] = df[dpd_month_cols].sum(axis=1)
+
+    # Bureau risk composite
+    if all(c in df.columns for c in ["debt_to_credit_ratio", "overdue_count", "bureau_loan_count"]):
+        df["BUREAU_RISK_SCORE"] = (
+            df["debt_to_credit_ratio"].fillna(0) * 0.5
+            + (df["overdue_count"] / df["bureau_loan_count"].clip(lower=1)) * 0.3
+            + (1 - df.get("bb_current_ratio", pd.Series(0.5, index=df.index)).fillna(0.5)) * 0.2
+        )
+
+    # Payment discipline composite
+    if "late_payment_ratio" in df.columns and "payment_to_due_ratio" in df.columns:
+        df["PAYMENT_DISCIPLINE"] = (
+            (1 - df["late_payment_ratio"].fillna(0)) * 0.5
+            + df["payment_to_due_ratio"].fillna(1).clip(upper=1.5) / 1.5 * 0.5
+        )
+
+    # Total credit exposure ratio
+    if "total_credit_amount" in df.columns and "AMT_INCOME_TOTAL" in df.columns:
+        df["TOTAL_EXPOSURE_RATIO"] = (
+            (df["total_credit_amount"].fillna(0) + df["AMT_CREDIT"])
+            / (df["AMT_INCOME_TOTAL"] + 1)
+        )
 
     return df
 

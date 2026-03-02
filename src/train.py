@@ -1,9 +1,17 @@
 """
-Training script — Champion (Logistic Scorecard) & Challenger (XGBoost).
+Training script — all four models in the champion/challenger framework.
+
+Models:
+    1. Champion: Logistic Scorecard (WoE + StandardScaler + L2-tuned LR)
+    2. Challenger 1: XGBoost (Optuna hyperparameter search)
+    3. Challenger 2: LightGBM DART (validated hyperparameters)
+    4. Stacking Ensemble: XGBoost + LightGBM base, LogisticRegression meta
 
 Usage:
     python src/train.py --model scorecard --data data/processed
     python src/train.py --model xgboost  --data data/processed
+    python src/train.py --model lightgbm --data data/processed
+    python src/train.py --model stacking --data data/processed
 """
 
 import argparse
@@ -175,11 +183,7 @@ def train_scorecard(X: pd.DataFrame, y: pd.Series):
 def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
     mlflow.set_experiment("credit_risk_challenger")
 
-    # Encode categoricals
     X_encoded = X.copy()
-    cat_cols = X_encoded.select_dtypes(include=["object", "category"]).columns
-    for col in cat_cols:
-        X_encoded[col] = X_encoded[col].astype("category").cat.codes
 
     pos_weight = float((y == 0).sum() / (y == 1).sum())
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
@@ -267,51 +271,65 @@ def train_xgboost(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
 # ── Challenger 2: LightGBM with Optuna tuning ───────────────
 def train_lightgbm(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
     """
-    LightGBM with DART boosting.
-
-    Standard LightGBM GBDT underperforms XGBoost on this NaN-heavy dataset
-    (AUC ~0.73 vs ~0.79).  DART (Dropouts meet Multiple Additive Regression
-    Trees) applies dropout regularisation across boosting iterations and
-    recovers parity with XGBoost.
-
-    DART is too slow for per-trial Optuna (each 5-fold CV takes ~20 min),
-    so we use validated parameters with 5-fold CV instead.
+    LightGBM with DART boosting, tuned via Optuna.
     """
     mlflow.set_experiment("credit_risk_lightgbm")
 
     X_encoded = X.copy()
-    cat_cols = X_encoded.select_dtypes(include=["object", "category"]).columns.tolist()
-    for col in cat_cols:
-        X_encoded[col] = X_encoded[col].astype("category").cat.codes
 
     pos_weight = float((y == 0).sum() / (y == 1).sum())
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
 
-    # Validated DART parameters — tested at 5-fold CV AUC=0.7821
-    params = {
+    def objective(trial):
+        p = {
+            "boosting_type": "dart",
+            "n_estimators": trial.suggest_int("n_estimators", 300, 900, step=50),
+            "max_depth": trial.suggest_int("max_depth", 4, 8),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.15, log=True),
+            "num_leaves": trial.suggest_int("num_leaves", 31, 127),
+            "min_child_samples": trial.suggest_int("min_child_samples", 20, 80),
+            "subsample": trial.suggest_float("subsample", 0.6, 0.95),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 0.95),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-3, 10, log=True),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 10, log=True),
+            "drop_rate": trial.suggest_float("drop_rate", 0.05, 0.3),
+            "max_drop": trial.suggest_int("max_drop", 20, 80),
+            "scale_pos_weight": pos_weight,
+            "random_state": RANDOM_STATE,
+            "verbose": -1,
+        }
+        fold_aucs = []
+        for train_idx, val_idx in skf.split(X_encoded, y):
+            mdl = lgb.LGBMClassifier(**p)
+            mdl.fit(
+                X_encoded.iloc[train_idx], y.iloc[train_idx],
+                eval_set=[(X_encoded.iloc[val_idx], y.iloc[val_idx])],
+                callbacks=[lgb.log_evaluation(0)],
+            )
+            y_prob = mdl.predict_proba(X_encoded.iloc[val_idx])[:, 1]
+            fold_aucs.append(roc_auc_score(y.iloc[val_idx], y_prob))
+        return np.mean(fold_aucs)
+
+    print(f"  Running Optuna for LightGBM DART ({n_trials} trials) ...")
+    sampler = optuna.samplers.TPESampler(seed=RANDOM_STATE)
+    study = optuna.create_study(direction="maximize", sampler=sampler)
+    study.optimize(objective, n_trials=n_trials, n_jobs=1, show_progress_bar=True)
+
+    best_params = study.best_params
+    best_params.update({
         "boosting_type": "dart",
-        "n_estimators": 800,
-        "max_depth": -1,
-        "learning_rate": 0.03,
-        "num_leaves": 127,
-        "min_child_samples": 25,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "reg_alpha": 0.1,
-        "reg_lambda": 1.0,
-        "drop_rate": 0.1,
         "scale_pos_weight": pos_weight,
         "random_state": RANDOM_STATE,
         "verbose": -1,
-    }
+    })
+    print(f"  Best trial AUC={study.best_value:.4f}")
 
-    print("  Training LightGBM DART with validated params ...")
-    with mlflow.start_run(run_name="lightgbm_dart_v1"):
-        mlflow.log_params(params)
+    with mlflow.start_run(run_name="lightgbm_dart_v2"):
+        mlflow.log_params(best_params)
 
         cv_results = []
         for fold, (train_idx, val_idx) in enumerate(skf.split(X_encoded, y)):
-            model = lgb.LGBMClassifier(**params)
+            model = lgb.LGBMClassifier(**best_params)
             model.fit(
                 X_encoded.iloc[train_idx], y.iloc[train_idx],
                 eval_set=[(X_encoded.iloc[val_idx], y.iloc[val_idx])],
@@ -325,7 +343,7 @@ def train_lightgbm(X: pd.DataFrame, y: pd.Series, n_trials: int = 30):
             print(f"  Fold {fold}: AUC={auc:.4f}  Gini={gini:.4f}  KS={ks:.4f}")
 
         # Final fit on full data
-        final_model = lgb.LGBMClassifier(**params)
+        final_model = lgb.LGBMClassifier(**best_params)
         final_model.fit(X_encoded, y, callbacks=[lgb.log_evaluation(0)])
 
         mlflow.log_metric("mean_auc", np.mean([r["auc"] for r in cv_results]))
@@ -352,9 +370,6 @@ def train_stacking(X: pd.DataFrame, y: pd.Series):
     mlflow.set_experiment("credit_risk_stacking")
 
     X_encoded = X.copy()
-    cat_cols_obj = X_encoded.select_dtypes(include=["object", "category"]).columns.tolist()
-    for col in cat_cols_obj:
-        X_encoded[col] = X_encoded[col].astype("category").cat.codes
 
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     pos_weight = float((y == 0).sum() / (y == 1).sum())

@@ -1,22 +1,26 @@
-{
-  "lightgbm_challenger": {
-    "AUC": 0.8818,
-    "Gini": 0.7636,
-    "KS": 0.6198
+[
+  {
+    "Model":"Champion (Scorecard)",
+    "AUC-ROC":0.768,
+    "Gini":0.536,
+    "KS Statistic":0.4044
   },
-  "scorecard_champion": {
-    "AUC": 0.7689,
-    "Gini": 0.5378,
-    "KS": 0.4044
+  {
+    "Model":"Challenger 1 (XGBoost)",
+    "AUC-ROC":0.7888,
+    "Gini":0.5776,
+    "KS Statistic":0.4343
   },
-  "stacking_ensemble": {
-    "AUC": 0.854,
-    "Gini": 0.708,
-    "KS": 0.5527
+  {
+    "Model":"Challenger 2 (LightGBM DART)",
+    "AUC-ROC":0.7869,
+    "Gini":0.5737,
+    "KS Statistic":0.4326
   },
-  "xgboost_challenger": {
-    "AUC": 0.843,
-    "Gini": 0.686,
-    "KS": 0.532
+  {
+    "Model":"Challenger 3 (Stacking)",
+    "AUC-ROC":0.7903,
+    "Gini":0.5806,
+    "KS Statistic":0.4381
   }
-}
+]

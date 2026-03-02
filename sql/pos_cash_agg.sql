@@ -45,7 +45,39 @@ SELECT
         THEN SUM(CASE WHEN pc.SK_DPD > 0 THEN 1 ELSE 0 END) * 1.0
              / COUNT(*)
         ELSE 0
-    END                                                  AS dpd_rate
+    END                                                  AS dpd_rate,
+
+    -- ── Variability ─────────────────────────────────────────
+    STDDEV(pc.SK_DPD)                                    AS std_pos_dpd,
+    STDDEV(pc.CNT_INSTALMENT_FUTURE)                     AS std_remaining_inst,
+
+    -- ── Recency windows ─────────────────────────────────────
+    SUM(CASE WHEN pc.MONTHS_BALANCE >= -12 AND pc.SK_DPD > 0
+             THEN 1 ELSE 0 END)                          AS pos_dpd_last_12m,
+    SUM(CASE WHEN pc.MONTHS_BALANCE >= -12
+             THEN 1 ELSE 0 END)                          AS pos_records_last_12m,
+    CASE
+        WHEN SUM(CASE WHEN pc.MONTHS_BALANCE >= -12 THEN 1 ELSE 0 END) > 0
+        THEN SUM(CASE WHEN pc.MONTHS_BALANCE >= -12 AND pc.SK_DPD > 0
+                      THEN 1 ELSE 0 END) * 1.0
+             / SUM(CASE WHEN pc.MONTHS_BALANCE >= -12 THEN 1 ELSE 0 END)
+        ELSE 0
+    END                                                  AS pos_dpd_rate_last_12m,
+
+    -- ── DPD trend (recent vs older) ─────────────────────────
+    CASE
+        WHEN SUM(CASE WHEN pc.MONTHS_BALANCE < -12 THEN 1 ELSE 0 END) > 0
+        THEN (
+            SUM(CASE WHEN pc.MONTHS_BALANCE >= -12 AND pc.SK_DPD > 0
+                     THEN 1 ELSE 0 END) * 1.0
+            / NULLIF(SUM(CASE WHEN pc.MONTHS_BALANCE >= -12 THEN 1 ELSE 0 END), 0)
+        ) - (
+            SUM(CASE WHEN pc.MONTHS_BALANCE < -12 AND pc.SK_DPD > 0
+                     THEN 1 ELSE 0 END) * 1.0
+            / SUM(CASE WHEN pc.MONTHS_BALANCE < -12 THEN 1 ELSE 0 END)
+        )
+        ELSE NULL
+    END                                                  AS pos_dpd_trend
 
 FROM POS_CASH_balance pc
 JOIN previous_application prev

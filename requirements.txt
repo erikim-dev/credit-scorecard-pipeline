@@ -30,16 +30,14 @@ fastapi>=0.104
 uvicorn>=0.24
 pydantic>=2.5
 
-# Dashboard & monitoring
+# Dashboard
 streamlit>=1.29
-evidently>=0.4
+
+# Statistics (VIF computation)
+statsmodels>=0.14
 
 # Data download
 kaggle>=1.6
-
-# Credit risk specific
-scorecardpy>=0.1.9
-optbinning>=0.19
 
 # Utilities
 joblib>=1.3

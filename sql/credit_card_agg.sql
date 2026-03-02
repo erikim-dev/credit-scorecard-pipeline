@@ -39,7 +39,38 @@ SELECT
     -- DPD
     AVG(cc.SK_DPD)                                       AS avg_cc_dpd,
     MAX(cc.SK_DPD)                                       AS max_cc_dpd,
-    SUM(CASE WHEN cc.SK_DPD > 0 THEN 1 ELSE 0 END)      AS cc_months_with_dpd
+    SUM(CASE WHEN cc.SK_DPD > 0 THEN 1 ELSE 0 END)      AS cc_months_with_dpd,
+
+    -- ── Variability ─────────────────────────────────────────
+    STDDEV(cc.AMT_BALANCE)                               AS std_cc_balance,
+    STDDEV(cc.AMT_DRAWINGS_CURRENT)                      AS std_cc_drawings,
+
+    -- ── Peak utilisation ────────────────────────────────────
+    MAX(CASE WHEN cc.AMT_CREDIT_LIMIT_ACTUAL > 0
+             THEN cc.AMT_BALANCE * 1.0 / cc.AMT_CREDIT_LIMIT_ACTUAL
+             ELSE NULL END)                              AS max_utilisation_ratio,
+
+    -- ── Recency windows ─────────────────────────────────────
+    AVG(CASE WHEN cc.MONTHS_BALANCE >= -6
+             THEN cc.AMT_BALANCE END)                    AS avg_balance_last_6m,
+    AVG(CASE WHEN cc.MONTHS_BALANCE >= -12
+             THEN cc.AMT_BALANCE END)                    AS avg_balance_last_12m,
+    SUM(CASE WHEN cc.MONTHS_BALANCE >= -12 AND cc.SK_DPD > 0
+             THEN 1 ELSE 0 END)                          AS cc_dpd_last_12m,
+
+    -- ── Balance trend (recent minus older) ──────────────────
+    AVG(CASE WHEN cc.MONTHS_BALANCE >= -6
+             THEN cc.AMT_BALANCE END) -
+    AVG(CASE WHEN cc.MONTHS_BALANCE < -6 AND cc.MONTHS_BALANCE >= -18
+             THEN cc.AMT_BALANCE END)                    AS cc_balance_trend,
+
+    -- ── Utilisation trend ───────────────────────────────────
+    AVG(CASE WHEN cc.MONTHS_BALANCE >= -6 AND cc.AMT_CREDIT_LIMIT_ACTUAL > 0
+             THEN cc.AMT_BALANCE * 1.0 / cc.AMT_CREDIT_LIMIT_ACTUAL END) -
+    AVG(CASE WHEN cc.MONTHS_BALANCE < -6 AND cc.MONTHS_BALANCE >= -18
+              AND cc.AMT_CREDIT_LIMIT_ACTUAL > 0
+             THEN cc.AMT_BALANCE * 1.0 / cc.AMT_CREDIT_LIMIT_ACTUAL END)
+                                                         AS cc_utilisation_trend
 
 FROM credit_card_balance cc
 JOIN previous_application prev

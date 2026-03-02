@@ -21,6 +21,7 @@ dist/
 build/
 .eggs/
 *.egg
+.pytest_cache/
 
 # ── Jupyter ───────────────────────────────────────────────────
 .ipynb_checkpoints/
@@ -28,6 +29,8 @@ build/
 # ── Environment ──────────────────────────────────────────────
 .env
 .venv/
+.venv-1/
+.venv-2/
 venv/
 env/
 

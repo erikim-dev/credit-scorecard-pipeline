@@ -30,7 +30,7 @@ from schemas import (
 )
 from woe_encoder import WoEEncoder
 
-MODEL_VERSION = "2.0.0"
+MODEL_VERSION = "2.1.0"
 
 # ── Load model at startup ────────────────────────────────────
 MODEL_PATH = pathlib.Path(

@@ -28,7 +28,7 @@
 |--------|-------|
 | **Source** | Home Credit Default Risk (Kaggle competition) |
 | **Size** | 307,511 applications |
-| **Features** | 259 engineered features (122 original + 137 derived) from 8 relational tables |
+| **Features** | ~300 engineered features (122 original + ~178 derived) from 8 relational tables |
 | **Target distribution** | 8.07% default rate |
 | **Date range** | Historical (competition dataset) |
 | **Geography** | Emerging market consumer lending |
@@ -47,9 +47,9 @@
 
 | Metric | Champion (Scorecard) | Challenger 1 (XGBoost) | Challenger 2 (LightGBM DART) | Stacking Ensemble |
 |--------|---------------------|---------------------|---------------------|---------------------|
-| AUC-ROC | 0.7689 | 0.8430 | **0.8818** | 0.8540 |
-| Gini Coefficient | 0.5378 | 0.6860 | **0.7636** | 0.7080 |
-| KS Statistic | 0.4044 | 0.5320 | **0.6198** | 0.5527 |
+| AUC-ROC | 0.7680 | 0.7888 | 0.7869 | **0.7903** |
+| Gini Coefficient | 0.5360 | 0.5776 | 0.5737 | **0.5806** |
+| KS Statistic | 0.4044 | 0.4343 | 0.4326 | **0.4381** |
 | CV AUC (5-fold) | 0.7638 | 0.7867 | 0.7821 | 0.7873 |
 | Interpretability | High (coefficients) | Requires SHAP | Requires SHAP | Requires SHAP |
 
@@ -161,7 +161,7 @@ Performance was evaluated across demographic proxy segments:
 | 2026-02-28 | 1.0-rc2 | Added Optuna hyperparameter tuning for XGBoost. SHAP adverse action reasons added to API. Fairness audit across gender/age segments completed. |
 | 2026-02-28 | 1.0 | Production release. PSI monitoring deployed. Streamlit dashboard live. Docker images pushed to Docker Hub. API deployed on Render. |
 | 2026-03-01 | 2.0.0 | Added 13 bureau_balance features and 20+ derived features (EXT_SOURCE interactions, time-based features, credit ratios). Feature count increased from 199 to 232 columns (230 features). Champion upgraded with StandardScaler + L2 regularization tuning. Challenger upgraded with Optuna 15-trial hyperparameter tuning. Champion AUC 0.7566 -> 0.7638; Challenger AUC 0.7823 -> 0.8316. |
-| 2026-03-01 | 2.1.0 | Added missing value indicators (11 binary flags), EXT_SOURCE median imputation, Bayesian smoothed target encoding for 16 categorical columns (259 total features). Added LightGBM DART challenger (AUC 0.8818) and XGBoost+LightGBM stacking ensemble (AUC 0.8540). LightGBM standard GBDT underperformed at 0.73 AUC — DART boosting resolved by applying dropout regularisation. |
+| 2026-03-01 | 2.1.0 | Added missing value indicators (12 binary flags), EXT_SOURCE median imputation, Bayesian smoothed target encoding for 16 categorical columns (~300 total features). Added LightGBM DART challenger (AUC 0.7869) and XGBoost+LightGBM stacking ensemble (AUC 0.7903). LightGBM standard GBDT underperformed at 0.73 AUC — DART boosting resolved by applying dropout regularisation. |
 
 ---
 

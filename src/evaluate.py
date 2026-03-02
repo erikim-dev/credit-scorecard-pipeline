@@ -343,9 +343,6 @@ def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
 
         elif "stacking" in name and isinstance(artefact, dict):
             # Stacking ensemble: run both base models, then meta-learner
-            cat_cols = X.select_dtypes(include=["object", "category"]).columns
-            for c in cat_cols:
-                X[c] = X[c].astype("category").cat.codes
             xgb_prob = artefact["xgb_model"].predict_proba(X)[:, 1]
             lgb_prob = artefact["lgb_model"].predict_proba(X)[:, 1]
             meta_X = np.column_stack([xgb_prob, lgb_prob])
@@ -353,9 +350,6 @@ def main(models_dir: pathlib.Path, data_dir: pathlib.Path):
             y_prob = artefact["meta_model"].predict_proba(meta_X_s)[:, 1]
 
         else:
-            cat_cols = X.select_dtypes(include=["object", "category"]).columns
-            for c in cat_cols:
-                X[c] = X[c].astype("category").cat.codes
             y_prob = artefact.predict_proba(X)[:, 1]
 
         y_true = df_test["TARGET"]

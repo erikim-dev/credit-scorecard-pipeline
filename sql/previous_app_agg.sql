@@ -47,7 +47,38 @@ SELECT
 
     -- Timing
     MAX(DAYS_DECISION)                                   AS latest_decision_days,
-    MIN(DAYS_DECISION)                                   AS earliest_decision_days
+    MIN(DAYS_DECISION)                                   AS earliest_decision_days,
+
+    -- ── Variability ─────────────────────────────────────────
+    STDDEV(AMT_APPLICATION)                              AS std_application_amount,
+    STDDEV(AMT_CREDIT)                                   AS std_prev_credit_amount,
+
+    -- ── Recency windows ─────────────────────────────────────
+    SUM(CASE WHEN DAYS_DECISION >= -365 THEN 1 ELSE 0 END) AS prev_apps_last_12m,
+    SUM(CASE WHEN DAYS_DECISION >= -365 AND NAME_CONTRACT_STATUS = 'Refused'
+             THEN 1 ELSE 0 END)                          AS refusals_last_12m,
+    SUM(CASE WHEN DAYS_DECISION >= -365 AND NAME_CONTRACT_STATUS = 'Approved'
+             THEN 1 ELSE 0 END)                          AS approvals_last_12m,
+
+    -- ── Recent approval trend ───────────────────────────────
+    CASE
+        WHEN SUM(CASE WHEN DAYS_DECISION >= -365 THEN 1 ELSE 0 END) > 0
+        THEN SUM(CASE WHEN DAYS_DECISION >= -365 AND NAME_CONTRACT_STATUS = 'Approved'
+                      THEN 1 ELSE 0 END) * 1.0
+             / SUM(CASE WHEN DAYS_DECISION >= -365 THEN 1 ELSE 0 END)
+        ELSE NULL
+    END                                                  AS approval_rate_last_12m,
+
+    -- ── Most recent application outcome ─────────────────────
+    CASE
+        WHEN MAX(DAYS_DECISION) IS NOT NULL
+        THEN (SELECT pa2.NAME_CONTRACT_STATUS
+              FROM previous_application pa2
+              WHERE pa2.SK_ID_CURR = previous_application.SK_ID_CURR
+              ORDER BY pa2.DAYS_DECISION DESC
+              LIMIT 1)
+        ELSE NULL
+    END                                                  AS latest_app_status
 
 FROM previous_application
 GROUP BY SK_ID_CURR
