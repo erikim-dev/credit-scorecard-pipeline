@@ -1384,11 +1384,41 @@ elif page == "Model Analytics":
                     })
                 st.dataframe(pd.DataFrame(parity_data), use_container_width=True, hide_index=True)
 
-                fig = px.bar(fdf, x="Value", y="AUC", color="Group",
-                             color_discrete_sequence=PAL, text="AUC")
-                fig.update_layout(template=T, yaxis_range=[0.5, 1.0],
-                                  height=380, margin=dict(t=20))
-                fig.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+                # --- AUC by group bar chart (high-visibility) ---
+                auc_lo = max(0, fdf["AUC"].min() - 0.06)
+                auc_hi = min(1.0, fdf["AUC"].max() + 0.06)
+                fig = px.bar(
+                    fdf, x="Value", y="AUC", color="Group",
+                    color_discrete_sequence=[C1, C4], text="AUC",
+                    barmode="group",
+                )
+                fig.update_traces(
+                    texttemplate="%{text:.4f}", textposition="outside",
+                    marker_line_width=1.2, marker_line_color="rgba(255,255,255,0.25)",
+                    width=0.45, textfont_size=13,
+                )
+                fig.update_layout(
+                    template=T, height=440,
+                    margin=dict(t=40, b=40, l=50, r=30),
+                    yaxis=dict(
+                        range=[auc_lo, auc_hi],
+                        title="AUC-ROC",
+                        gridcolor="rgba(255,255,255,0.08)",
+                    ),
+                    xaxis=dict(title="Segment"),
+                    legend=dict(
+                        orientation="h", yanchor="bottom", y=1.02,
+                        xanchor="center", x=0.5,
+                        font=dict(size=12),
+                    ),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                # reference line at 0.5 baseline
+                fig.add_hline(
+                    y=0.5, line_dash="dot", line_color=MUTED,
+                    annotation_text="Random (0.5)", annotation_position="bottom left",
+                    annotation_font_color=MUTED, annotation_font_size=10,
+                )
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Acceptance Rate Analysis
