@@ -86,8 +86,10 @@ st.markdown(f"""
     h1 {{ font-weight: 700; letter-spacing: -0.025em; }}
     h2, h3 {{ font-weight: 600; color: {TEXT}; }}
 
-    /* hide chrome */
+    /* hide chrome + sidebar */
     #MainMenu, footer {{ visibility: hidden; }}
+    section[data-testid="stSidebar"] {{ display: none; }}
+    button[data-testid="stSidebarCollapsedControl"] {{ display: none; }}
 
     /* status pill */
     .pill {{
@@ -621,50 +623,49 @@ def _align_to_model(Xh, features):
 
 
 # ---------------------------------------------------------------------------
-# Sidebar navigation
+# Top navigation bar (replaces sidebar)
 # ---------------------------------------------------------------------------
-with st.sidebar:
-    st.markdown("### Credit Risk Platform")
-    st.caption("Champion / Challenger Scoring")
-    st.divider()
-
+_hdr_left, _hdr_right = st.columns([3, 7])
+with _hdr_left:
+    st.markdown(
+        f'<span style="font-weight:700;font-size:1.10rem;color:{TEXT};'
+        f'letter-spacing:-0.02em;">Credit Risk Platform</span>',
+        unsafe_allow_html=True,
+    )
+with _hdr_right:
     page = st.radio(
-        "Navigation",
+        "nav",
         ["Scoring", "Batch Processing", "Model Analytics", "Data Explorer"],
+        horizontal=True,
         label_visibility="collapsed",
+        key="_top_nav",
     )
 
-    st.divider()
+st.divider()
+
+# Compact info bar + glossary
+_info_left, _info_right = st.columns([5, 1])
+with _info_left:
     art = load_models()
     n_models = sum(1 for k in ("xgb", "lgb", "scorecard", "stacking") if k in art)
     mode_label = "API" if USE_API else "Standalone"
-    st.markdown(f"""
-    <div style="background:{CARD};border:1px solid {BORDER};border-radius:10px;
-        padding:14px 16px;font-size:0.78rem;color:{MUTED};line-height:1.7;">
-        Mode <b style="color:{TEXT}">{mode_label}</b><br>
-        Models loaded <b style="color:{TEXT}">{n_models}</b><br>
-        Features <b style="color:{TEXT}">300</b>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.divider()
-    with st.expander("Help & Glossary"):
+    st.caption(f"Mode: **{mode_label}** · Models: **{n_models}** · Features: **300**")
+with _info_right:
+    with st.popover("Help"):
         st.markdown(f"""
-        **Model Metrics**
-        - **AUC-ROC**: Area under ROC curve (0-1). Higher is better. 0.5 = random, 1.0 = perfect.
-        - **Gini**: Normalized AUC (0-1). Shows model's ability to rank-order applicants.
-        - **KS Statistic**: Maximum separation between Default and Non-Default distributions.
-        
-        **Features**
-        - **WoE (Weight of Evidence)**: Log ratio of good vs bad rate. Captures predictive power.
-        - **IV (Information Value)**: Sum of WoE × (% Good - % Bad). Measures feature importance.
-        - **Missing Indicator**: Binary flags for missing values in credit bureau data.
-        
-        **Risk Metrics**
-        - **PSI (Population Stability Index)**: Measures data drift. <0.10=Stable, 0.10-0.20=Watch, >0.20=Alert.
-        - **Fairness**: AUC consistency across demographic groups. Flag if AUC gap > 0.05.
-        - **Calibration**: Predicted probabilities match observed default rates.
-        """)
+**Model Metrics**
+- **AUC-ROC** – Area under ROC (0-1). Higher = better.
+- **Gini** – Normalised AUC. Rank-order ability.
+- **KS** – Max separation between Default/Non-Default.
+
+**Features**
+- **WoE** – Weight of Evidence (log good/bad ratio).
+- **IV** – Information Value (feature importance).
+
+**Risk Metrics**
+- **PSI** – Population Stability Index (<0.10 Stable).
+- **Fairness** – AUC gap across groups (flag if >0.05).
+""")
 
 # Ensure data exists (generate if needed for Streamlit Cloud)
 ensure_test_data_exists()
