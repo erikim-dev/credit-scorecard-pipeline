@@ -918,7 +918,6 @@ elif page == "Model Analytics":
     # -- tab: ROC ---------------------------------------------------------
     with tab_roc:
         st.markdown("<small>Model ROC curves and AUC scores on hold-out data. Higher is better.</small>", unsafe_allow_html=True)
-        st.markdown("""<small>Model ROC curves and AUC scores on hold-out data. Higher is better.</small>""", unsafe_allow_html=True)
         if test_df is not None and artefacts:
             from sklearn.metrics import roc_curve, roc_auc_score as auc_score
             from sklearn.model_selection import train_test_split
@@ -993,12 +992,11 @@ elif page == "Model Analytics":
             )
             st.plotly_chart(fig_roc, use_container_width=True)
         else:
-            st.info("Load test data to view ROC curves.")
+            st.warning("Unable to load ROC curves. Please ensure test data and models are available in the project directory.")
 
     # -- tab: Distributions -----------------------------------------------
     with tab_dist:
         st.markdown("<small>Predicted probability distributions by actual outcome. Clear separation indicates good model discrimination.</small>", unsafe_allow_html=True)
-        st.markdown("""<small>Predicted probability distributions by actual outcome. Clear separation indicates good model discrimination.</small>""", unsafe_allow_html=True)
         if test_df is not None and "xgb" in artefacts:
             from sklearn.model_selection import train_test_split
 
@@ -1085,7 +1083,7 @@ elif page == "Model Analytics":
             except Exception:
                 st.caption("Decile analysis not available.")
         else:
-            st.info("Load data and models to view distributions.")
+            st.warning("Unable to load distributions. Please ensure test data and models are available in the project directory.")
 
     # -- tab: Stability ---------------------------------------------------
     with tab_stability:
