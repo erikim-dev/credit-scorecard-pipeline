@@ -740,23 +740,26 @@ elif page == "Batch Processing":
                 for i, row in df.iterrows():
                     try:
                         pay = {
-                        "age": int(row.get("age", 30)),
-                        "income": float(row.get("income", 100_000)),
-                        "loan_amount": float(row.get("loan_amount", 200_000)),
-                        "annuity": float(row.get("annuity", 15_000)),
-                        "goods_price": float(row.get("goods_price", 0)),
-                        "employment_years": float(row.get("employment_years", 0)),
-                        "bureau_loan_count": int(row.get("bureau_loan_count", 0)),
-                        "active_credits": int(row.get("active_credits", 0)),
-                        "total_debt": float(row.get("total_debt", 0)),
-                        "overdue_count": int(row.get("overdue_count", 0)),
-                        "ext_source_1": float(row.get("ext_source_1", 0.5)) if pd.notna(row.get("ext_source_1")) else 0.5,
-                        "ext_source_2": float(row.get("ext_source_2", 0.5)) if pd.notna(row.get("ext_source_2")) else 0.5,
-                        "ext_source_3": float(row.get("ext_source_3", 0.5)) if pd.notna(row.get("ext_source_3")) else 0.5,
-                    }
-                    r = score_application(pay, model_choice)
-                    if r:
-                        results_list.append(r)
+                            "age": int(row.get("age", 30)),
+                            "income": float(row.get("income", 100_000)),
+                            "loan_amount": float(row.get("loan_amount", 200_000)),
+                            "annuity": float(row.get("annuity", 15_000)),
+                            "goods_price": float(row.get("goods_price", 0)),
+                            "employment_years": float(row.get("employment_years", 0)),
+                            "bureau_loan_count": int(row.get("bureau_loan_count", 0)),
+                            "active_credits": int(row.get("active_credits", 0)),
+                            "total_debt": float(row.get("total_debt", 0)),
+                            "overdue_count": int(row.get("overdue_count", 0)),
+                            "ext_source_1": float(row.get("ext_source_1", 0.5)) if pd.notna(row.get("ext_source_1")) else 0.5,
+                            "ext_source_2": float(row.get("ext_source_2", 0.5)) if pd.notna(row.get("ext_source_2")) else 0.5,
+                            "ext_source_3": float(row.get("ext_source_3", 0.5)) if pd.notna(row.get("ext_source_3")) else 0.5,
+                        }
+                        r = score_application(pay, model_choice)
+                        if r:
+                            results_list.append(r)
+                    except Exception as e:
+                        failed_rows.append({"row": i, "error": str(e)})
+                    
                     pct = (i + 1) / len(df)
                     elapsed = time.time() - t0
                     eta = (elapsed / (i + 1)) * (len(df) - i - 1)
