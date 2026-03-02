@@ -151,6 +151,7 @@ def load_test_data():
             if "TARGET" not in df.columns:
                 print(f"[ERROR] TARGET column not found in {p}")
                 return None
+            print(f"[OK] Loaded test data: {len(df)} rows, {len(df.columns)} cols")
             return df
         except Exception as e:
             print(f"[ERROR] Failed to load test data from {p}: {e}")
@@ -1264,11 +1265,15 @@ elif page == "Data Explorer":
 
     test_df = load_test_data()
 
-    if test_df is not None:
+    if test_df is not None and len(test_df) > 0:
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Rows", f"{len(test_df):,}")
         m2.metric("Features", f"{test_df.shape[1] - 2}")
-        m3.metric("Default Rate", f"{test_df['TARGET'].mean():.2%}")
+        has_target = "TARGET" in test_df.columns
+        if has_target:
+            m3.metric("Default Rate", f"{test_df['TARGET'].mean():.2%}")
+        else:
+            m3.metric("Default Rate", "N/A")
         m4.metric("Missing Columns", f"{(test_df.isnull().any()).sum()}")
 
         tab_ov, tab_corr, tab_feat = st.tabs(["Overview", "Correlations", "Feature Drill-Down"])
@@ -1288,89 +1293,103 @@ elif page == "Data Explorer":
 
         with tab_corr:
             st.markdown("##### Top Correlations with TARGET")
-            n_top = st.slider("Number of features", 10, 50, 25, key="corr_n")
-            corr = (test_df.corr(numeric_only=True)["TARGET"]
-                    .drop("TARGET").abs().sort_values(ascending=False).head(n_top))
-            fig = go.Figure(go.Bar(
-                y=corr.index[::-1], x=corr.values[::-1],
-                orientation="h", marker_color=C1,
-                text=[f"{v:.3f}" for v in corr.values[::-1]],
-                textposition="outside", textfont=dict(size=10, color=TEXT),
-            ))
-            fig.update_layout(
-                template=T, xaxis_title="Absolute Correlation",
-                height=max(400, n_top * 22), margin=dict(t=20, l=220),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if "TARGET" in test_df.columns:
+                n_top = st.slider("Number of features", 10, 50, 25, key="corr_n")
+                corr = (test_df.corr(numeric_only=True)["TARGET"]
+                        .drop("TARGET").abs().sort_values(ascending=False).head(n_top))
+                fig = go.Figure(go.Bar(
+                    y=corr.index[::-1], x=corr.values[::-1],
+                    orientation="h", marker_color=C1,
+                    text=[f"{v:.3f}" for v in corr.values[::-1]],
+                    textposition="outside", textfont=dict(size=10, color=TEXT),
+                ))
+                fig.update_layout(
+                    template=T, xaxis_title="Absolute Correlation",
+                    height=max(400, n_top * 22), margin=dict(t=20, l=220),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("TARGET column not found in dataset.")
 
         with tab_feat:
             num_cols = sorted([c for c in test_df.select_dtypes("number").columns
                                if c not in ("TARGET", "SK_ID_CURR")])
-            sel = st.selectbox("Feature", num_cols, key="feat_sel")
+            if num_cols:
+                sel = st.selectbox("Feature", num_cols, key="feat_sel")
 
-            if sel:
-                col_ch, col_st = st.columns([3, 1])
+                if sel:
+                    col_ch, col_st = st.columns([3, 1])
 
-                with col_ch:
-                    fig = go.Figure()
-                    for lbl, clr, nm in [(0, C1, "Non-Default"), (1, C2, "Default")]:
-                        vals = test_df.loc[test_df["TARGET"] == lbl, sel].dropna()
-                        fig.add_trace(go.Histogram(
-                            x=vals, name=nm, marker_color=clr,
-                            opacity=0.7, nbinsx=50, histnorm="probability density",
-                        ))
-                    fig.update_layout(
-                        template=T, barmode="overlay",
-                        xaxis_title=sel, yaxis_title="Density",
-                        height=400, margin=dict(t=20),
-                        legend=dict(orientation="h", yanchor="top", y=1.1),
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    with col_ch:
+                        fig = go.Figure()
+                        if "TARGET" in test_df.columns:
+                            for lbl, clr, nm in [(0, C1, "Non-Default"), (1, C2, "Default")]:
+                                vals = test_df.loc[test_df["TARGET"] == lbl, sel].dropna()
+                                fig.add_trace(go.Histogram(
+                                    x=vals, name=nm, marker_color=clr,
+                                    opacity=0.7, nbinsx=50, histnorm="probability density",
+                                ))
+                        else:
+                            vals = test_df[sel].dropna()
+                            fig.add_trace(go.Histogram(
+                                x=vals, name="All", marker_color=C1,
+                                opacity=0.7, nbinsx=50,
+                            ))
+                        fig.update_layout(
+                            template=T, barmode="overlay",
+                            xaxis_title=sel, yaxis_title="Density",
+                            height=400, margin=dict(t=20),
+                            legend=dict(orientation="h", yanchor="top", y=1.1),
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
 
-                with col_st:
-                    cd = test_df[sel]
-                    st.markdown("##### Statistics")
-                    for label, val in [
-                        ("Mean", cd.mean()), ("Median", cd.median()),
-                        ("Std Dev", cd.std()), ("Min", cd.min()),
-                        ("Max", cd.max()),
-                    ]:
-                        st.markdown(f"**{label}:** {val:.4f}")
-                    st.markdown(f"**Missing:** {cd.isnull().mean():.1%}")
+                    with col_st:
+                        cd = test_df[sel]
+                        st.markdown("##### Statistics")
+                        for label, val in [
+                            ("Mean", cd.mean()), ("Median", cd.median()),
+                            ("Std Dev", cd.std()), ("Min", cd.min()),
+                            ("Max", cd.max()),
+                        ]:
+                            st.markdown(f"**{label}:** {val:.4f}")
+                        st.markdown(f"**Missing:** {cd.isnull().mean():.1%}")
 
-                    valid = test_df[[sel, "TARGET"]].dropna()
-                    if len(valid) > 10:
-                        cv = valid[sel].corr(valid["TARGET"])
-                        st.metric("Target Correlation", f"{cv:.4f}")
+                        if "TARGET" in test_df.columns:
+                            valid = test_df[[sel, "TARGET"]].dropna()
+                            if len(valid) > 10:
+                                cv = valid[sel].corr(valid["TARGET"])
+                                st.metric("Target Correlation", f"{cv:.4f}")
 
-                # Box-plot comparison
-                st.markdown("##### Distribution by Target")
-                box_df = test_df[[sel, "TARGET"]].dropna().copy()
-                box_df["TARGET"] = box_df["TARGET"].map({0: "Non-Default", 1: "Default"})
-                fig_box = px.box(
-                    box_df, x="TARGET", y=sel, color="TARGET",
-                    color_discrete_map={"Non-Default": C1, "Default": C2},
-                )
-                fig_box.update_layout(
-                    template=T, height=350, margin=dict(t=20),
-                    showlegend=False,
-                )
-                st.plotly_chart(fig_box, use_container_width=True)
+                    # Box-plot comparison
+                    if "TARGET" in test_df.columns:
+                        st.markdown("##### Distribution by Target")
+                        box_df = test_df[[sel, "TARGET"]].dropna().copy()
+                        box_df["TARGET"] = box_df["TARGET"].map({0: "Non-Default", 1: "Default"})
+                        fig_box = px.box(
+                            box_df, x="TARGET", y=sel, color="TARGET",
+                            color_discrete_map={"Non-Default": C1, "Default": C2},
+                        )
+                        fig_box.update_layout(
+                            template=T, height=350, margin=dict(t=20),
+                            showlegend=False,
+                        )
+                        st.plotly_chart(fig_box, use_container_width=True)
+            else:
+                st.warning("No numeric features found in dataset.")
     else:
-        st.warning("**Data not available**")
-        st.markdown("""
-The training dataset has not been generated yet. To proceed:
+        st.error("Data Load Failed")
+        st.markdown(f"""
+**Data file location:** `data/processed/train_features.csv`
 
-1. **Run the feature engineering notebook:**
-   - Open `notebooks/03_feature_engineering.ipynb`
-   - Execute all cells to generate `data/processed/train_features.csv`
+**Status:** File not found or unable to load
 
-Alternatively, run from command line:
+**Solution:** Generate the training data by running:
+
 ```bash
 python src/feature_engineering.py --data data/raw
 ```
 
-Once the data is ready, refresh this page.
+Or execute the notebook: `notebooks/03_feature_engineering.ipynb`
 """)
 
 
