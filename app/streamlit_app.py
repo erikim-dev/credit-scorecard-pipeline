@@ -54,72 +54,32 @@ st.markdown(f"""
     /* layout — start content just below the Streamlit header bar */
     .block-container {{ padding-top: 1rem; padding-bottom: 1rem; }}
 
-    /* ── Sidebar: HIDDEN by default, slides in and PUSHES main content ── */
+    /* ── Sidebar styling (Streamlit handles positioning natively) ── */
     section[data-testid="stSidebar"] {{
         background: #0d1117;
         border-right: 1px solid {BORDER};
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        height: 100vh !important;
-        z-index: 999 !important;
-        width: 300px !important;
-        min-width: 300px !important;
-        max-width: 300px !important;
-        transition: transform 0.3s ease, visibility 0s linear 0.3s,
-                    box-shadow 0.3s ease !important;
-    }}
-    /* ── Collapsed / default: off-screen ── */
-    section[data-testid="stSidebar"]:not([aria-expanded="true"]) {{
-        transform: translateX(-100%) !important;
-        visibility: hidden !important;
-        box-shadow: none !important;
-    }}
-    /* ── Expanded: slide in ── */
-    section[data-testid="stSidebar"][aria-expanded="true"] {{
-        transform: translateX(0) !important;
-        visibility: visible !important;
-        box-shadow: 4px 0 24px rgba(0,0,0,0.45);
-        transition: transform 0.3s ease, visibility 0s linear 0s,
-                    box-shadow 0.3s ease !important;
     }}
     section[data-testid="stSidebar"] > div:first-child {{
-        width: 100% !important;
         padding: 1rem 0.8rem;
     }}
 
-    /* ── Main content: push right when sidebar is open ── */
+    /* ── Smooth push transition on main content ── */
     .stApp [data-testid="stAppViewContainer"],
     .stApp [data-testid="stMain"] {{
         transition: margin-left 0.3s ease !important;
     }}
 
-    /* ── Responsive sidebar width ── */
-    @media (min-width: 1400px) {{
-        section[data-testid="stSidebar"] {{ width: 340px !important; min-width: 340px !important; max-width: 340px !important; }}
-    }}
-    /* ── Mobile: narrower sidebar + compact padding ── */
+    /* ── Mobile: compact sidebar padding ── */
     @media (max-width: 768px) {{
-        section[data-testid="stSidebar"] {{
-            width: 260px !important; min-width: 260px !important; max-width: 260px !important;
-        }}
         section[data-testid="stSidebar"] > div:first-child {{
             padding: 0.7rem 0.6rem;
             font-size: 0.88rem;
         }}
     }}
     @media (max-width: 480px) {{
-        section[data-testid="stSidebar"] {{
-            width: 220px !important; min-width: 220px !important; max-width: 220px !important;
-        }}
         section[data-testid="stSidebar"] > div:first-child {{
             padding: 0.5rem 0.45rem;
             font-size: 0.82rem;
-        }}
-    }}
-    @media (max-width: 360px) {{
-        section[data-testid="stSidebar"] {{
-            width: 200px !important; min-width: 200px !important; max-width: 200px !important;
         }}
     }}
 
