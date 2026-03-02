@@ -98,50 +98,7 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
-    /* reveal button */
-    #reveal-sidebar {{
-        position: fixed; left: 8px; top: 12px; z-index: 9999;
-        background: {C1}; color: #0b1020; padding: 6px 10px; border-radius: 8px;
-        font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-    }}
 </style>
-
-<div id="reveal-sidebar">»»</div>
-<script>
-(function(){{
-    const btn = document.getElementById('reveal-sidebar');
-    function isCollapsed(){{
-        // If Streamlit exposes the collapsed control, assume sidebar is collapsed
-        return !!document.querySelector('[data-testid="collapsedControl"]') || !!document.querySelector('button[title="Open sidebar"]') || !!document.querySelector('button[aria-label="Open navigation"]') || !!document.querySelector('button[aria-label="Show sidebar"]');
-    }}
-    function updateIcon(){{
-        try{{
-            btn.innerText = isCollapsed() ? '»»' : '««';
-        }}catch(e){{}}
-    }}
-    function toggleSidebar(){{
-        const selectors = [
-            '[data-testid="collapsedControl"]',
-            'button[title="Open sidebar"]',
-            'button[aria-label="Open navigation"]',
-            'button[aria-label="Show sidebar"]'
-        ];
-        for(const s of selectors){{
-            const el = document.querySelector(s);
-            if(el){{ el.click(); setTimeout(updateIcon, 250); return; }}
-        }}
-        try{{ const p = window.parent.document.querySelector('[data-testid="collapsedControl"]'); if(p){{ p.click(); setTimeout(updateIcon, 250); }} }}catch(e){{}}
-    }}
-    btn && btn.addEventListener('click', toggleSidebar);
-
-    // Observe DOM changes to update icon when Streamlit toggles sidebar
-    const observer = new MutationObserver(function(){{ updateIcon(); }});
-    observer.observe(document.body, {{ childList: true, subtree: true }});
-
-    // initial icon state
-    setTimeout(updateIcon, 300);
-}})();
-</script>
 """, unsafe_allow_html=True)
 
 
