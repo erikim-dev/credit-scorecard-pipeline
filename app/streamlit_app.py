@@ -88,7 +88,17 @@ st.markdown(f"""
     button[data-testid="stSidebarCollapseButton"] p {{
         display: none !important;
     }}
-    /* Collapse ✕ sticks to top of sidebar */
+    /* Open arrow points → (right, towards sidebar) */
+    button[data-testid="stSidebarCollapsedControl"] svg {{
+        transform: rotate(0deg);
+        transition: transform 0.25s ease;
+    }}
+    /* Close arrow points ← (left, away from sidebar) — flipped 180° */
+    button[data-testid="stSidebarCollapseButton"] svg {{
+        transform: rotate(180deg);
+        transition: transform 0.25s ease;
+    }}
+    /* Collapse button sticks to top of sidebar */
     section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
         position: sticky; top: 0.5rem;
     }}
