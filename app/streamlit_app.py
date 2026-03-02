@@ -597,6 +597,29 @@ def confusion_matrix_at_threshold(y_true, y_pred, threshold=0.5):
     return tn, fp, fn, tp
 
 
+def _get_model_features(model, key):
+    """Extract the feature names a model was trained on."""
+    try:
+        if key == "xgb":
+            return list(model.get_booster().feature_names)
+        elif key == "lgb":
+            return list(model.feature_name_)
+    except Exception:
+        pass
+    return None
+
+
+def _align_to_model(Xh, features):
+    """Reindex a DataFrame so its columns match *features* exactly.
+
+    Missing columns are filled with 0; extra columns are dropped;
+    column order is corrected.
+    """
+    if features is None:
+        return Xh
+    return Xh.reindex(columns=features, fill_value=0)
+
+
 # ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
@@ -1056,7 +1079,8 @@ elif page == "Model Analytics":
                 st.markdown("##### Confusion Matrix at Different Thresholds")
                 if _Xh is not None and artefacts.get("xgb") is not None:
                     try:
-                        yp = artefacts["xgb"].predict_proba(_Xh)[:, 1]
+                        Xh_cm = _align_to_model(_Xh, _get_model_features(artefacts["xgb"], "xgb"))
+                        yp = artefacts["xgb"].predict_proba(Xh_cm)[:, 1]
                         threshold_vals = [0.3, 0.4, 0.5, 0.6, 0.7]
                         cm_data = []
                         for thresh in threshold_vals:
@@ -1095,13 +1119,14 @@ elif page == "Model Analytics":
                     curves_added = 0
 
                     cfgs = [
-                        ("XGBoost", artefacts.get("xgb"), C1),
-                        ("LightGBM DART", artefacts.get("lgb"), C3),
+                        ("XGBoost", "xgb", artefacts.get("xgb"), C1),
+                        ("LightGBM DART", "lgb", artefacts.get("lgb"), C3),
                     ]
-                    for nm, mdl, clr in cfgs:
+                    for nm, mkey, mdl, clr in cfgs:
                         if mdl is not None:
                             try:
-                                yp = mdl.predict_proba(Xh)[:, 1]
+                                Xh_a = _align_to_model(Xh, _get_model_features(mdl, mkey))
+                                yp = mdl.predict_proba(Xh_a)[:, 1]
                                 fpr, tpr, _ = roc_curve(yh, yp)
                                 a = auc_score(yh, yp)
                                 fig_roc.add_trace(go.Scatter(
@@ -1115,8 +1140,10 @@ elif page == "Model Analytics":
                     if "stacking" in artefacts and isinstance(artefacts["stacking"], dict):
                         try:
                             s = artefacts["stacking"]
-                            xp = s["xgb_model"].predict_proba(Xh)[:, 1]
-                            lp = s["lgb_model"].predict_proba(Xh)[:, 1]
+                            Xh_xgb = _align_to_model(Xh, _get_model_features(s["xgb_model"], "xgb"))
+                            Xh_lgb = _align_to_model(Xh, _get_model_features(s["lgb_model"], "lgb"))
+                            xp = s["xgb_model"].predict_proba(Xh_xgb)[:, 1]
+                            lp = s["lgb_model"].predict_proba(Xh_lgb)[:, 1]
                             mX = s["meta_scaler"].transform(np.column_stack([xp, lp]))
                             yp = s["meta_model"].predict_proba(mX)[:, 1]
                             fpr, tpr, _ = roc_curve(yh, yp)
@@ -1134,7 +1161,7 @@ elif page == "Model Analytics":
                             woe = artefacts["woe_encoder"]
                             scl = artefacts.get("scaler")
                             sel = artefacts.get("selected_features", [])
-                            Xsc = Xh[[c for c in sel if c in Xh.columns]]
+                            Xsc = Xh.reindex(columns=sel, fill_value=0)
                             Xsc = woe.transform(Xsc).fillna(0)
                             if scl is not None:
                                 Xsc = pd.DataFrame(scl.transform(Xsc), columns=Xsc.columns)
@@ -1182,17 +1209,22 @@ elif page == "Model Analytics":
             try:
                 if dist_model_name == "Stacking Ensemble" and "stacking" in artefacts:
                     s = artefacts["stacking"]
-                    xp = s["xgb_model"].predict_proba(Xh)[:, 1]
-                    lp = s["lgb_model"].predict_proba(Xh)[:, 1]
+                    Xh_xgb = _align_to_model(Xh, _get_model_features(s["xgb_model"], "xgb"))
+                    Xh_lgb = _align_to_model(Xh, _get_model_features(s["lgb_model"], "lgb"))
+                    xp = s["xgb_model"].predict_proba(Xh_xgb)[:, 1]
+                    lp = s["lgb_model"].predict_proba(Xh_lgb)[:, 1]
                     mX = s["meta_scaler"].transform(np.column_stack([xp, lp]))
                     y_prob = s["meta_model"].predict_proba(mX)[:, 1]
                 elif dist_model_name == "LightGBM DART" and "lgb" in artefacts:
-                    y_prob = artefacts["lgb"].predict_proba(Xh)[:, 1]
+                    Xh_lgb = _align_to_model(Xh, _get_model_features(artefacts["lgb"], "lgb"))
+                    y_prob = artefacts["lgb"].predict_proba(Xh_lgb)[:, 1]
                 else:
-                    y_prob = artefacts["xgb"].predict_proba(Xh)[:, 1]
+                    Xh_xgb = _align_to_model(Xh, _get_model_features(artefacts["xgb"], "xgb"))
+                    y_prob = artefacts["xgb"].predict_proba(Xh_xgb)[:, 1]
             except Exception as dist_err:
                 try:
-                    y_prob = artefacts["xgb"].predict_proba(Xh)[:, 1]
+                    Xh_xgb = _align_to_model(Xh, _get_model_features(artefacts["xgb"], "xgb"))
+                    y_prob = artefacts["xgb"].predict_proba(Xh_xgb)[:, 1]
                 except Exception:
                     st.error(f"Could not generate predictions: {str(dist_err)[:120]}")
                     y_prob = None
@@ -1301,7 +1333,8 @@ elif page == "Model Analytics":
             tsplit = _tsplit
             Xh, yh = _Xh, _yh
             try:
-                yp = artefacts["xgb"].predict_proba(Xh)[:, 1]
+                Xh_xgb = _align_to_model(Xh, _get_model_features(artefacts["xgb"], "xgb"))
+                yp = artefacts["xgb"].predict_proba(Xh_xgb)[:, 1]
             except Exception as fair_err:
                 st.error(f"Could not generate predictions for fairness analysis: {str(fair_err)[:120]}")
                 yp = None
