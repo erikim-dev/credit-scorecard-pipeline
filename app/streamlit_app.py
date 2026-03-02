@@ -98,47 +98,13 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
-    /* responsive sidebar for mobile */
-    @media (max-width: 768px) {{
-        section[data-testid="stSidebar"] {{
-            position: fixed;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            z-index: 999;
-            width: 280px;
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
-        }}
-        section[data-testid="stSidebar"][data-open="true"] {{
-            transform: translateX(0);
-        }}
-    }}
-
-    /* overlay for mobile sidebar */
-    #sidebar-overlay {{
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 998;
-    }}
-    @media (max-width: 768px) {{
-        #sidebar-overlay[data-show="true"] {{
-            display: block;
-        }}
-    }}
-
-    /* toggle button for mobile */
-    #sidebar-toggle {{
+    /* mobile menu button - show on mobile */
+    .mobile-menu-btn {{
         display: none;
         position: fixed;
         top: 12px;
         left: 12px;
-        z-index: 1000;
+        z-index: 1001;
         background: {C1};
         color: #0b1020;
         border: none;
@@ -148,43 +114,81 @@ st.markdown(f"""
         cursor: pointer;
         font-weight: 700;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        transition: background 0.2s ease;
     }}
+    .mobile-menu-btn:hover {{
+        background: {C5};
+    }}
+
+    /* sidebar overlay for mobile */
+    .sidebar-overlay {{
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 998;
+    }}
+    .sidebar-overlay.show {{
+        display: block;
+    }}
+
+    /* hide sidebar on mobile by default */
     @media (max-width: 768px) {{
-        #sidebar-toggle {{
+        .mobile-menu-btn {{
             display: block;
+        }}
+        section[data-testid="stSidebar"] {{
+            display: none;
+        }}
+        section[data-testid="stSidebar"].sidebar-open {{
+            display: block;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            z-index: 999;
+            width: 280px;
+            overflow-y: auto;
+            border-right: 1px solid {BORDER};
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
         }}
     }}
 
 </style>
 
-<button id="sidebar-toggle">☰</button>
-<div id="sidebar-overlay"></div>
+<button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
 
 <script>
 (function(){{
-  const toggle = document.getElementById('sidebar-toggle');
+  const menuBtn = document.getElementById('mobile-menu-btn');
   const overlay = document.getElementById('sidebar-overlay');
   const sidebar = document.querySelector('[data-testid="stSidebar"]');
 
-  if (!toggle || !sidebar || !overlay) return;
+  if (!menuBtn || !sidebar || !overlay) return;
 
   function isMobile() {{
     return window.innerWidth <= 768;
   }}
 
   function openSidebar() {{
-    sidebar.setAttribute('data-open', 'true');
-    overlay.setAttribute('data-show', 'true');
+    if (isMobile()) {{
+      sidebar.classList.add('sidebar-open');
+      overlay.classList.add('show');
+    }}
   }}
 
   function closeSidebar() {{
-    sidebar.setAttribute('data-open', 'false');
-    overlay.setAttribute('data-show', 'false');
+    sidebar.classList.remove('sidebar-open');
+    overlay.classList.remove('show');
   }}
 
-  toggle.addEventListener('click', function(e) {{
+  menuBtn.addEventListener('click', function(e) {{
     e.stopPropagation();
-    if (sidebar.getAttribute('data-open') === 'true') {{
+    if (sidebar.classList.contains('sidebar-open')) {{
       closeSidebar();
     }} else {{
       openSidebar();
@@ -193,15 +197,15 @@ st.markdown(f"""
 
   overlay.addEventListener('click', closeSidebar);
 
-  // Close sidebar when navigation changes
-  const navButtons = sidebar.querySelectorAll('[role="radio"]');
-  navButtons.forEach(btn => {{
-    btn.addEventListener('click', function() {{
+  // Close sidebar when clicking nav items
+  const navLinks = sidebar.querySelectorAll('[role="radio"]');
+  navLinks.forEach(link => {{
+    link.addEventListener('click', function() {{
       setTimeout(closeSidebar, 100);
     }});
   }});
 
-  // Handle resize
+  // Handle resize events
   window.addEventListener('resize', function() {{
     if (window.innerWidth > 768) {{
       closeSidebar();
