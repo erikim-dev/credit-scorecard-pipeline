@@ -831,25 +831,6 @@ elif page == "Model Analytics":
     comparison = load_comparison()
     test_df = load_test_data()
     artefacts = load_models()
-    
-    # Status indicator
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if test_df is not None:
-            st.success(f"✓ Data: {len(test_df):,} rows")
-        else:
-            st.error("✗ Data not available")
-    with col2:
-        models_loaded = len([k for k in artefacts.keys() if k != "selected_features"])
-        if models_loaded > 0:
-            st.success(f"✓ Models: {models_loaded}/6 loaded")
-        else:
-            st.error("✗ No models available")
-    with col3:
-        if comparison is not None:
-            st.success(f"✓ Metrics available")
-        else:
-            st.error("✗ Metrics not available")
 
     tab_perf, tab_roc, tab_dist, tab_stability, tab_fairness = st.tabs([
         "Performance", "ROC Curves", "Distributions", "Stability", "Fairness",
