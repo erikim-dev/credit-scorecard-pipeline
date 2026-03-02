@@ -330,42 +330,85 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# JS enforcer — ensures sidebar stays hidden even if Streamlit's JS overrides CSS
+# JS enforcer — programmatically collapse sidebar on load, then keep it hidden
 import streamlit.components.v1 as _components
 _components.html("""
 <script>
 (function() {
     var doc = window.parent.document;
-    function enforceSidebar() {
+
+    function collapseSidebar() {
+        var sb = doc.querySelector('section[data-testid="stSidebar"]');
+        if (!sb) return false;
+
+        // If sidebar is expanded, click the collapse button to close it
+        if (sb.getAttribute('aria-expanded') === 'true') {
+            // Try every known collapse button selector
+            var btn = sb.querySelector('button[data-testid="stSidebarCollapseButton"]')
+                   || sb.querySelector('button[kind="header"]')
+                   || sb.querySelector('[data-testid="stSidebarNav"] button')
+                   || sb.querySelector('button');
+            if (btn) {
+                btn.click();
+                return true;
+            }
+            // Fallback: directly set aria-expanded to false
+            sb.setAttribute('aria-expanded', 'false');
+        }
+        return true;
+    }
+
+    function hideStyles(sb) {
+        if (!sb) return;
+        sb.style.setProperty('transform', 'translateX(-100%)', 'important');
+        sb.style.setProperty('visibility', 'hidden', 'important');
+        sb.style.setProperty('width', '0px', 'important');
+        sb.style.setProperty('min-width', '0px', 'important');
+        sb.style.setProperty('overflow', 'hidden', 'important');
+        sb.style.setProperty('position', 'fixed', 'important');
+    }
+
+    function showStyles(sb) {
+        if (!sb) return;
+        sb.style.setProperty('transform', 'translateX(0)', 'important');
+        sb.style.setProperty('visibility', 'visible', 'important');
+        sb.style.setProperty('width', 'fit-content', 'important');
+        sb.style.setProperty('min-width', '220px', 'important');
+        sb.style.setProperty('overflow', 'visible', 'important');
+        sb.style.setProperty('position', 'fixed', 'important');
+    }
+
+    function enforce() {
         var sb = doc.querySelector('section[data-testid="stSidebar"]');
         if (!sb) return;
-        var expanded = sb.getAttribute('aria-expanded');
-        if (expanded !== 'true') {
-            sb.style.setProperty('transform', 'translateX(-100%)', 'important');
-            sb.style.setProperty('visibility', 'hidden', 'important');
-            sb.style.setProperty('width', '0px', 'important');
-            sb.style.setProperty('min-width', '0px', 'important');
-            sb.style.setProperty('overflow', 'hidden', 'important');
-            sb.style.setProperty('position', 'fixed', 'important');
+        if (sb.getAttribute('aria-expanded') === 'true') {
+            showStyles(sb);
         } else {
-            sb.style.setProperty('transform', 'translateX(0)', 'important');
-            sb.style.setProperty('visibility', 'visible', 'important');
-            sb.style.setProperty('width', 'fit-content', 'important');
-            sb.style.setProperty('min-width', '220px', 'important');
-            sb.style.setProperty('overflow', 'visible', 'important');
-            sb.style.setProperty('position', 'fixed', 'important');
+            hideStyles(sb);
         }
     }
-    enforceSidebar();
-    var obs = new MutationObserver(enforceSidebar);
-    var target = doc.querySelector('section[data-testid="stSidebar"]');
-    if (target) obs.observe(target, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
-    // Also run periodically for first 5 seconds to catch late Streamlit renders
-    var count = 0;
-    var iv = setInterval(function() {
-        enforceSidebar();
-        if (++count > 25) clearInterval(iv);
+
+    // Phase 1: collapse on load (retry until sidebar exists)
+    var collapsed = false;
+    var attempts = 0;
+    var bootInterval = setInterval(function() {
+        if (!collapsed) collapsed = collapseSidebar();
+        var sb = doc.querySelector('section[data-testid="stSidebar"]');
+        if (sb && sb.getAttribute('aria-expanded') !== 'true') {
+            hideStyles(sb);
+        }
+        if (++attempts > 50) clearInterval(bootInterval);  // stop after 10s
     }, 200);
+
+    // Phase 2: MutationObserver to handle user toggle
+    function startObserver() {
+        var sb = doc.querySelector('section[data-testid="stSidebar"]');
+        if (!sb) return;
+        var obs = new MutationObserver(enforce);
+        obs.observe(sb, {attributes: true, attributeFilter: ['aria-expanded', 'style']});
+    }
+    setTimeout(startObserver, 500);
+    setTimeout(startObserver, 2000);
 })();
 </script>
 """, height=0)
