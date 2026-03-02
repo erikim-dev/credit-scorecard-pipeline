@@ -252,6 +252,16 @@ Covers: model purpose, training data details, performance by subgroup, fairness 
 
 ---
 
+## Why models are tracked in this repository
+
+- **Immediate reproducibility:** Serialized model artefacts in `models/` let reviewers and demo viewers run the dashboard and reproduce scores without re-training large models.
+- **Streamlit Cloud friendly:** The app is designed to run as a standalone demo; keeping the `.pkl` files in-repo avoids extra deployment steps or external storage configuration.
+- **Small maintenance overhead:** Model files here are intentionally versioned alongside code and documentation so a specific commit contains code + artefacts for governance and audit.
+
+If you prefer a lighter repository, we can remove model binaries from the main branch and publish them as GitHub release assets instead. Ask me to do that and I will prepare the steps.
+
+---
+
 ## Deployment
 
 | Service | Platform | URL |
