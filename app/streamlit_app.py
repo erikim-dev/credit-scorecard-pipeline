@@ -244,7 +244,13 @@ def load_models():
 @st.cache_data(show_spinner=False)
 def load_test_data():
     p = ROOT / "data" / "processed" / "train_features.csv"
-    return pd.read_csv(p) if p.exists() else None
+    if p.exists():
+        try:
+            return pd.read_csv(p)
+        except Exception as e:
+            st.warning(f"Error loading data: {e}")
+            return None
+    return None
 
 
 @st.cache_data(show_spinner=False)
@@ -1267,4 +1273,18 @@ elif page == "Data Explorer":
                 )
                 st.plotly_chart(fig_box, use_container_width=True)
     else:
-        st.info("No processed data found. Run feature engineering first.")
+        st.warning("📊 **Data not available**")
+        st.markdown("""
+The training dataset has not been generated yet. To proceed:
+
+1. **Run the feature engineering notebook:**
+   - Open `notebooks/03_feature_engineering.ipynb`
+   - Execute all cells to generate `data/processed/train_features.csv`
+
+Alternatively, run from command line:
+```bash
+python src/feature_engineering.py --data data/raw
+```
+
+Once the data is ready, refresh this page.
+""")
