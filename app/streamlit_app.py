@@ -45,7 +45,7 @@ st.set_page_config(
     page_title="Credit Risk Platform",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,117 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
+    /* responsive sidebar for mobile */
+    @media (max-width: 768px) {{
+        section[data-testid="stSidebar"] {{
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            z-index: 999;
+            width: 280px;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }}
+        section[data-testid="stSidebar"][data-open="true"] {{
+            transform: translateX(0);
+        }}
+    }}
+
+    /* overlay for mobile sidebar */
+    #sidebar-overlay {{
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 998;
+    }}
+    @media (max-width: 768px) {{
+        #sidebar-overlay[data-show="true"] {{
+            display: block;
+        }}
+    }}
+
+    /* toggle button for mobile */
+    #sidebar-toggle {{
+        display: none;
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 1000;
+        background: {C1};
+        color: #0b1020;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 18px;
+        cursor: pointer;
+        font-weight: 700;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }}
+    @media (max-width: 768px) {{
+        #sidebar-toggle {{
+            display: block;
+        }}
+    }}
+
 </style>
+
+<button id="sidebar-toggle">☰</button>
+<div id="sidebar-overlay"></div>
+
+<script>
+(function(){{
+  const toggle = document.getElementById('sidebar-toggle');
+  const overlay = document.getElementById('sidebar-overlay');
+  const sidebar = document.querySelector('[data-testid="stSidebar"]');
+
+  if (!toggle || !sidebar || !overlay) return;
+
+  function isMobile() {{
+    return window.innerWidth <= 768;
+  }}
+
+  function openSidebar() {{
+    sidebar.setAttribute('data-open', 'true');
+    overlay.setAttribute('data-show', 'true');
+  }}
+
+  function closeSidebar() {{
+    sidebar.setAttribute('data-open', 'false');
+    overlay.setAttribute('data-show', 'false');
+  }}
+
+  toggle.addEventListener('click', function(e) {{
+    e.stopPropagation();
+    if (sidebar.getAttribute('data-open') === 'true') {{
+      closeSidebar();
+    }} else {{
+      openSidebar();
+    }}
+  }});
+
+  overlay.addEventListener('click', closeSidebar);
+
+  // Close sidebar when navigation changes
+  const navButtons = sidebar.querySelectorAll('[role="radio"]');
+  navButtons.forEach(btn => {{
+    btn.addEventListener('click', function() {{
+      setTimeout(closeSidebar, 100);
+    }});
+  }});
+
+  // Handle resize
+  window.addEventListener('resize', function() {{
+    if (window.innerWidth > 768) {{
+      closeSidebar();
+    }}
+  }});
+}})();
+</script>
 """, unsafe_allow_html=True)
 
 
@@ -420,17 +530,6 @@ with st.sidebar:
         Features <b style="color:{TEXT}">300</b>
     </div>
     """, unsafe_allow_html=True)
-
-# Fallback inline navigation (visible when sidebar is collapsed)
-try:
-    _current_page = page
-except NameError:
-    _current_page = "Scoring"
-_pages = ["Scoring", "Batch Processing", "Model Analytics", "Data Explorer"]
-if _current_page not in _pages:
-    _current_page = "Scoring"
-page = st.selectbox("Navigation", _pages, index=_pages.index(_current_page), key="page_main", label_visibility="collapsed")
-
 
 # ===================================================================
 # PAGE: Scoring  (live-updating sliders, real-time gauge)
