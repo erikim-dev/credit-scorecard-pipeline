@@ -97,20 +97,42 @@ st.markdown(f"""
     @media (min-width: 1400px) {{
         section[data-testid="stSidebar"] {{ max-width: 340px; }}
     }}
+    /* ── Mobile sidebar: dynamic size per screen width ── */
     @media (max-width: 768px) {{
         section[data-testid="stSidebar"] {{
             position: fixed; left: 0; top: 0; z-index: 999;
-            min-width: 200px; max-width: 80vw;
+            width: 72vw; min-width: 0; max-width: 280px;
             transform: translateX(-100%);
             transition: transform 0.3s ease;
+        }}
+        section[data-testid="stSidebar"] > div:first-child {{
+            padding: 0.7rem 0.6rem;
+            font-size: 0.88rem;
         }}
         section[data-testid="stSidebar"][aria-expanded="true"] {{
             transform: translateX(0);
             box-shadow: 4px 0 24px rgba(0,0,0,0.5);
         }}
-        button[data-testid="stSidebarCollapsedControl"] {{
-            position: fixed; top: 0.6rem; left: 0.5rem;
-            z-index: 1001;
+        /* Open-menu toggle (collapse ✕ / arrow): ALWAYS visible on top */
+        button[data-testid="stSidebarCollapsedControl"],
+        section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
+            position: fixed !important;
+            top: 0.55rem; left: 0.5rem;
+            z-index: 1002;
+        }}
+    }}
+    @media (max-width: 480px) {{
+        section[data-testid="stSidebar"] {{
+            width: 80vw; max-width: 240px;
+        }}
+        section[data-testid="stSidebar"] > div:first-child {{
+            padding: 0.5rem 0.45rem;
+            font-size: 0.82rem;
+        }}
+    }}
+    @media (max-width: 360px) {{
+        section[data-testid="stSidebar"] {{
+            width: 85vw; max-width: 210px;
         }}
     }}
 
@@ -158,9 +180,9 @@ st.markdown(f"""
        ══════════════════════════════════════════════════════════════ */
     @media (max-width: 768px) {{
 
-        /* ── Layout: less padding, more vertical space ── */
+        /* ── Layout: push content below the fixed toggle button ── */
         .block-container {{
-            padding-top: 0.6rem !important;
+            padding-top: 3.2rem !important;
             padding-left: 0.65rem !important;
             padding-right: 0.65rem !important;
             padding-bottom: 0.5rem !important;
