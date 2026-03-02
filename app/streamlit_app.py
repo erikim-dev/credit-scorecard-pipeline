@@ -464,6 +464,16 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+# Fallback inline navigation (visible when sidebar is collapsed)
+try:
+    _current_page = page
+except NameError:
+    _current_page = "Scoring"
+_pages = ["Scoring", "Batch Processing", "Model Analytics", "Data Explorer"]
+if _current_page not in _pages:
+    _current_page = "Scoring"
+page = st.selectbox("Navigation", _pages, index=_pages.index(_current_page), key="page_main", label_visibility="collapsed")
+
 
 # ===================================================================
 # PAGE: Scoring  (live-updating sliders, real-time gauge)
