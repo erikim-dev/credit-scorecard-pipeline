@@ -143,20 +143,31 @@ def load_models():
 @st.cache_data(show_spinner=False)
 def load_test_data():
     """Load test/training data for model evaluation."""
-    p = ROOT / "data" / "processed" / "train_features.csv"
-    if p.exists():
-        try:
-            df = pd.read_csv(p)
-            # Verify TARGET column exists
-            if "TARGET" not in df.columns:
-                print(f"[ERROR] TARGET column not found in {p}")
-                return None
-            print(f"[OK] Loaded test data: {len(df)} rows, {len(df.columns)} cols")
-            return df
-        except Exception as e:
-            print(f"[ERROR] Failed to load test data from {p}: {e}")
-            return None
-    print(f"[ERROR] Test data file not found: {p}")
+    # Try multiple path resolution strategies
+    possible_paths = [
+        ROOT / "data" / "processed" / "train_features.csv",
+        pathlib.Path("data") / "processed" / "train_features.csv",
+        pathlib.Path(".") / "data" / "processed" / "train_features.csv",
+    ]
+    
+    for p in possible_paths:
+        if p.exists():
+            try:
+                df = pd.read_csv(p)
+                # Verify TARGET column exists
+                if "TARGET" not in df.columns:
+                    print(f"[ERROR] TARGET column not found in {p}")
+                    return None
+                print(f"[OK] Loaded test data from {p}: {len(df)} rows, {len(df.columns)} cols")
+                return df
+            except Exception as e:
+                print(f"[ERROR] Failed to read {p}: {e}")
+                continue
+    
+    # Log all paths that were checked
+    print(f"[ERROR] Test data not found. Checked paths:")
+    for p in possible_paths:
+        print(f"  - {p.resolve()}")
     return None
 
 
@@ -1378,18 +1389,44 @@ elif page == "Data Explorer":
                 st.warning("No numeric features found in dataset.")
     else:
         st.error("Data Load Failed")
-        st.markdown(f"""
-**Data file location:** `data/processed/train_features.csv`
+        
+        # Debug information
+        with st.expander("Debug Info"):
+            st.write(f"**Current working directory:** {pathlib.Path.cwd()}")
+            st.write(f"**Attempting to load from:**")
+            st.write(f"- `{ROOT / 'data' / 'processed' / 'train_features.csv'}`")
+            st.write(f"- `{pathlib.Path('data') / 'processed' / 'train_features.csv'}`")
+            st.write(f"- `{pathlib.Path('.') / 'data' / 'processed' / 'train_features.csv'}`")
+            
+            # Check what exists
+            st.write("**Checked locations:**")
+            for p in [ROOT / "data" / "processed" / "train_features.csv",
+                      pathlib.Path("data") / "processed" / "train_features.csv",
+                      pathlib.Path(".") / "data" / "processed" / "train_features.csv"]:
+                exists = p.exists()
+                st.write(f"- {p}: {'✓ Found' if exists else '✗ Not found'}")
+        
+        st.markdown("""
+**Data file not found or unable to load**
 
-**Status:** File not found or unable to load
+The app expects training data at: `data/processed/train_features.csv`
 
-**Solution:** Generate the training data by running:
+**To fix this:**
 
-```bash
-python src/feature_engineering.py --data data/raw
-```
+1. Generate the training data by running:
+   ```bash
+   python src/feature_engineering.py --data data/raw
+   ```
 
-Or execute the notebook: `notebooks/03_feature_engineering.ipynb`
+2. Or execute the notebook: `notebooks/03_feature_engineering.ipynb`
+   - Open in Jupyter
+   - Run all cells to generate the CSV file
+
+3. Once complete, **refresh this page** in Streamlit
+
+**Alternatively**, if the file exists locally but isn't loading, try:
+- Clearing Streamlit cache: `streamlit run app/streamlit_app.py --logger.level=debug`
+- Checking file permissions on `data/processed/train_features.csv`
 """)
 
 
