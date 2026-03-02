@@ -45,7 +45,7 @@ st.set_page_config(
     page_title="Credit Risk Platform",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ---------------------------------------------------------------------------
@@ -97,7 +97,35 @@ st.markdown(f"""
     .pill-ok   {{ background: rgba(81,207,102,0.15); color: {C3}; }}
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
+
+    /* reveal button */
+    #reveal-sidebar {{
+        position: fixed; left: 8px; top: 12px; z-index: 9999;
+        background: {C1}; color: #0b1020; padding: 6px 10px; border-radius: 8px;
+        font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }}
 </style>
+
+<div id="reveal-sidebar">Show sidebar</div>
+<script>
+(function(){
+  const btn = document.getElementById('reveal-sidebar');
+  function toggleSidebar(){
+    const selectors = [
+      '[data-testid="collapsedControl"]',
+      'button[title="Open sidebar"]',
+      'button[aria-label="Open navigation"]',
+      'button[aria-label="Show sidebar"]'
+    ];
+    for(const s of selectors){
+      const el = document.querySelector(s);
+      if(el){ el.click(); return; }
+    }
+    try{ const p = window.parent.document.querySelector('[data-testid="collapsedControl"]'); p && p.click(); }catch(e){}
+  }
+  btn && btn.addEventListener('click', toggleSidebar);
+})();
+</script>
 """, unsafe_allow_html=True)
 
 
