@@ -58,24 +58,37 @@ st.markdown(f"""
     section[data-testid="stSidebar"] {{
         background: #0d1117;
         border-right: 1px solid {BORDER};
-        min-width: 180px;
-        width: fit-content;
-        max-width: 320px;
-        /* Start off-screen; Streamlit sets aria-expanded when user clicks toggle */
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-        position: fixed;
-        left: 0; top: 0;
-        height: 100vh;
-        z-index: 999;
+        min-width: 180px !important;
+        width: fit-content !important;
+        max-width: 320px !important;
+        /* Override Streamlit's own positioning on desktop */
+        position: fixed !important;
+        left: 0 !important; top: 0 !important;
+        height: 100vh !important;
+        z-index: 999 !important;
+        /* Hidden by default — slide in on toggle */
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s ease !important;
     }}
+    /* When Streamlit marks sidebar as expanded → slide in */
     section[data-testid="stSidebar"][aria-expanded="true"] {{
-        transform: translateX(0);
+        transform: translateX(0) !important;
         box-shadow: 4px 0 24px rgba(0,0,0,0.45);
     }}
+    /* When collapsed, also ensure it stays hidden (Streamlit sometimes sets width:0) */
+    section[data-testid="stSidebar"][aria-expanded="false"] {{
+        transform: translateX(-100%) !important;
+    }}
     section[data-testid="stSidebar"] > div:first-child {{
-        width: 100%;
+        width: 100% !important;
         padding: 1rem 0.8rem;
+    }}
+    /* Prevent Streamlit from pushing main content left when sidebar "opens" */
+    [data-testid="stAppViewBlockContainer"] {{
+        margin-left: 0 !important;
+    }}
+    .stApp [data-testid="stSidebar"] + div {{
+        margin-left: 0 !important;
     }}
 
     /* ── Toggle button: ALWAYS visible, both states ── */
