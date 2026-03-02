@@ -98,25 +98,6 @@ st.markdown(f"""
     .pill-warn {{ background: rgba(252,196,25,0.15); color: {C5}; }}
     .pill-bad  {{ background: rgba(255,107,107,0.15); color: {C2}; }}
 
-    /* keep sidebar arrow control always visible and sticky */
-    section[data-testid="stSidebar"] {{
-        position: fixed;
-        left: 0;
-        top: 0;
-        height: 100vh;
-        z-index: 100;
-    }}
-    section[data-testid="stSidebar"]::before {{
-        content: '';
-        display: block;
-        height: 100%;
-    }}
-    button[kind="secondary"] {{
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 101 !important;
-    }}
-
 </style>
 """, unsafe_allow_html=True)
 
