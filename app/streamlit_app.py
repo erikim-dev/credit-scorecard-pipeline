@@ -87,7 +87,7 @@ st.markdown(f"""
     h2, h3 {{ font-weight: 600; color: {TEXT}; }}
 
     /* hide chrome */
-    #MainMenu, footer, header {{ visibility: hidden; }}
+    #MainMenu, footer {{ visibility: hidden; }}
 
     /* status pill */
     .pill {{
