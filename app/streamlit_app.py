@@ -53,8 +53,65 @@ st.markdown(f"""
 <style>
     /* layout */
     .block-container {{ padding-top: 1.2rem; padding-bottom: 1rem; }}
+
+    /* ── Sidebar: dynamic width, auto-fit contents ── */
     section[data-testid="stSidebar"] {{
-        background: #0d1117; border-right: 1px solid {BORDER};
+        background: #0d1117;
+        border-right: 1px solid {BORDER};
+        min-width: 180px;
+        width: fit-content;
+        max-width: 320px;
+    }}
+    section[data-testid="stSidebar"] > div:first-child {{
+        width: 100%;          /* fill the auto-sized panel */
+        padding: 1rem 0.8rem;
+    }}
+
+    /* ── Toggle button: always a clean icon, never clipped text ── */
+    button[data-testid="stSidebarCollapsedControl"],
+    button[data-testid="stSidebarCollapseButton"] {{
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 1001;
+        min-width: 36px; min-height: 36px;
+        border-radius: 8px;
+        background: {CARD} !important;
+        border: 1px solid {BORDER} !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        overflow: hidden;          /* hide any text overflow */
+    }}
+    /* Hide the label text inside the toggle so only the arrow icon shows */
+    button[data-testid="stSidebarCollapsedControl"] p,
+    button[data-testid="stSidebarCollapseButton"] p {{
+        display: none !important;
+    }}
+    /* Collapse ✕ sticks to top of sidebar */
+    section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
+        position: sticky; top: 0.5rem;
+    }}
+
+    /* ── Responsive sidebar width ── */
+    @media (min-width: 1400px) {{
+        section[data-testid="stSidebar"] {{ max-width: 340px; }}
+    }}
+    @media (max-width: 768px) {{
+        section[data-testid="stSidebar"] {{
+            position: fixed; left: 0; top: 0; z-index: 999;
+            min-width: 200px; max-width: 80vw;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }}
+        section[data-testid="stSidebar"][aria-expanded="true"] {{
+            transform: translateX(0);
+            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+        }}
+        button[data-testid="stSidebarCollapsedControl"] {{
+            position: fixed; top: 0.6rem; left: 0.5rem;
+            z-index: 1001;
+        }}
     }}
 
     /* metric cards */
@@ -86,36 +143,6 @@ st.markdown(f"""
 
     /* hide chrome */
     #MainMenu, footer {{ visibility: hidden; }}
-
-    /* Sidebar toggle always visible (collapsed or expanded) */
-    button[data-testid="stSidebarCollapsedControl"],
-    button[data-testid="stSidebarCollapseButton"] {{
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        z-index: 1000;
-    }}
-    /* When sidebar is open, pin the ✕ button so it doesn't scroll away */
-    section[data-testid="stSidebar"] button[data-testid="stSidebarCollapseButton"] {{
-        position: sticky; top: 0.5rem;
-    }}
-
-    /* Mobile: slide-in / slide-out sidebar */
-    @media (max-width: 768px) {{
-        section[data-testid="stSidebar"] {{
-            position: fixed; left: 0; top: 0; z-index: 999;
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
-        }}
-        section[data-testid="stSidebar"][aria-expanded="true"] {{
-            transform: translateX(0);
-            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
-        }}
-        button[data-testid="stSidebarCollapsedControl"] {{
-            display: block !important;
-            z-index: 1000;
-        }}
-    }}
 
     /* status pill */
     .pill {{
