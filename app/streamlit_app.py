@@ -216,50 +216,70 @@ def load_comparison():
 def ensure_test_data_exists():
     """Ensure test data exists; generate sample if missing (for Streamlit Cloud)."""
     p = ROOT / "data" / "processed" / "train_features.csv"
-    
+
     if p.exists():
         return True
-    
+
     print("[INFO] Generating sample test data for Streamlit Cloud...")
     try:
-        # Create data directory if needed
+        import joblib
         p.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Generate synthetic data matching the expected schema
         np.random.seed(42)
         n_rows = 1000
-        
-        # Create base features
-        data = {
-            "SK_ID_CURR": np.arange(n_rows),
-            "TARGET": np.random.binomial(1, 0.08, n_rows),
-            "NAME_CONTRACT_TYPE": np.random.choice([1, 2], n_rows),
-            "CODE_GENDER": np.random.choice([1, 2], n_rows),
-            "FLAG_OWN_CAR": np.random.choice([0, 1], n_rows),
+
+        # ---------- discover expected columns from XGBoost model ----------
+        xgb_path = ROOT / "models" / "xgboost_challenger.pkl"
+        if xgb_path.exists():
+            xgb_mdl = joblib.load(xgb_path)
+            feature_names = xgb_mdl.get_booster().feature_names   # list[str]
+        else:
+            feature_names = None
+
+        # Object columns that exist in the real training data
+        _OBJECT_COLS = {
+            "NAME_CONTRACT_TYPE": ["Cash loans", "Revolving loans"],
+            "CODE_GENDER": ["M", "F"],
+            "FLAG_OWN_CAR": ["Y", "N"],
+            "FLAG_OWN_REALTY": ["Y", "N"],
+            "NAME_TYPE_SUITE": ["Unaccompanied", "Family", "Spouse, partner"],
+            "NAME_INCOME_TYPE": ["Working", "Commercial associate", "Pensioner", "State servant"],
+            "NAME_EDUCATION_TYPE": ["Secondary", "Higher education", "Incomplete higher", "Lower secondary"],
+            "NAME_FAMILY_STATUS": ["Married", "Single", "Civil marriage", "Separated", "Widow"],
+            "NAME_HOUSING_TYPE": ["House / apartment", "Rented apartment", "With parents"],
+            "OCCUPATION_TYPE": ["Laborers", "Sales staff", "Core staff", "Managers"],
+            "WEEKDAY_APPR_PROCESS_START": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+            "ORGANIZATION_TYPE": ["Business Entity Type 3", "Self-employed", "Other"],
+            "FONDKAPREMONT_MODE": ["reg oper account", "org spec account", "not specified"],
+            "HOUSETYPE_MODE": ["block of flats", "specific housing", "terraced house"],
+            "WALLSMATERIAL_MODE": ["Panel", "Stone, brick", "Block"],
+            "EMERGENCYSTATE_MODE": ["No", "Yes"],
+            "latest_app_status": ["Approved", "Refused", "Canceled", "Unused offer"],
         }
-        
-        # Add required numeric columns
-        required_cols = [
-            "DAYS_BIRTH", "AMT_INCOME_TOTAL", "AMT_CREDIT", "AMT_ANNUITY",
-            "AMT_GOODS_PRICE", "DAYS_EMPLOYED", "EXT_SOURCE_1", "EXT_SOURCE_2",
-            "EXT_SOURCE_3", "bureau_loan_count", "active_credits", "total_debt",
-            "overdue_count"
-        ]
-        
-        for col in required_cols:
-            if col.startswith("DAYS_"):
-                data[col] = np.random.randint(-25000, 0, n_rows)
-            elif col.startswith("AMT_"):
-                data[col] = np.random.exponential(50000, n_rows)
-            elif col.startswith("EXT_"):
-                data[col] = np.random.uniform(0, 1, n_rows)
-            else:
-                data[col] = np.random.poisson(2, n_rows)
-        
-        # Generate remaining 280 numeric features with random data
-        for i in range(280):
-            data[f"FEATURE_{i:03d}"] = np.random.randn(n_rows)
-        
+
+        data = {"SK_ID_CURR": np.arange(n_rows),
+                "TARGET": np.random.binomial(1, 0.08, n_rows)}
+
+        if feature_names:
+            for col in feature_names:
+                if col in _OBJECT_COLS:
+                    data[col] = np.random.choice(_OBJECT_COLS[col], n_rows)
+                elif col.startswith("DAYS_"):
+                    data[col] = np.random.randint(-25000, 0, n_rows).astype(float)
+                elif col.startswith("AMT_"):
+                    data[col] = np.random.exponential(50000, n_rows)
+                elif col.startswith("EXT_SOURCE") or col.startswith("EXT_SRC"):
+                    data[col] = np.random.uniform(0, 1, n_rows)
+                elif col.startswith("FLAG_") or col.startswith("REG_"):
+                    data[col] = np.random.choice([0, 1], n_rows).astype(float)
+                elif col.startswith("MISS_"):
+                    data[col] = np.random.choice([0, 1], n_rows, p=[0.85, 0.15]).astype(float)
+                else:
+                    data[col] = np.random.randn(n_rows)
+        else:
+            # Fallback: generic columns
+            for i in range(300):
+                data[f"FEATURE_{i:03d}"] = np.random.randn(n_rows)
+
         df = pd.DataFrame(data)
         df.to_csv(p, index=False)
         print(f"[OK] Generated sample data: {len(df)} rows, {len(df.columns)} cols at {p}")
@@ -1160,67 +1180,72 @@ elif page == "Model Analytics":
                     y_prob = artefacts["lgb"].predict_proba(Xh)[:, 1]
                 else:
                     y_prob = artefacts["xgb"].predict_proba(Xh)[:, 1]
-            except Exception:
-                y_prob = artefacts["xgb"].predict_proba(Xh)[:, 1]
+            except Exception as dist_err:
+                try:
+                    y_prob = artefacts["xgb"].predict_proba(Xh)[:, 1]
+                except Exception:
+                    st.error(f"Could not generate predictions: {str(dist_err)[:120]}")
+                    y_prob = None
 
-            scores = np.array([prob_to_score(p) for p in y_prob])
+            if y_prob is not None:
+                scores = np.array([prob_to_score(p) for p in y_prob])
 
-            fig = go.Figure()
-            fig.add_trace(go.Histogram(
-                x=scores[yh.values == 0], name="Non-Default",
-                marker_color=C1, opacity=0.7, nbinsx=50, histnorm="probability density",
-            ))
-            fig.add_trace(go.Histogram(
-                x=scores[yh.values == 1], name="Default",
-                marker_color=C2, opacity=0.7, nbinsx=50, histnorm="probability density",
-            ))
-            fig.update_layout(
-                template=T, barmode="overlay",
-                xaxis_title="Credit Score", yaxis_title="Density",
-                height=420, margin=dict(t=30),
-                legend=dict(orientation="h", yanchor="top", y=1.1),
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.markdown("##### Default Rate by Score Band")
-            sdf = pd.DataFrame({"score": scores, "default": yh.values})
-            sdf["band"] = pd.cut(
-                sdf["score"],
-                bins=[300, 450, 550, 620, 680, 750, 850],
-                labels=["300-450", "450-550", "550-620", "620-680", "680-750", "750-850"],
-            )
-            band = sdf.groupby("band", observed=False)["default"].agg(["mean", "count"]).reset_index()
-            band.columns = ["Band", "Default Rate", "Count"]
-
-            fig2 = go.Figure(go.Bar(
-                x=band["Band"], y=band["Default Rate"],
-                marker_color=[C2 if r > 0.15 else (C5 if r > 0.05 else C3) for r in band["Default Rate"]],
-                text=[f"{r:.1%}" for r in band["Default Rate"]],
-                textposition="outside", textfont=dict(color=TEXT),
-            ))
-            fig2.update_layout(
-                template=T, yaxis_title="Default Rate",
-                yaxis_tickformat=".0%", height=360, margin=dict(t=20),
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
-            st.markdown("##### Decile Analysis")
-            try:
-                from evaluate import decile_analysis
-                dec = decile_analysis(yh.values, y_prob)
-                fmt = {}
-                if "Bad_Rate" in dec.columns:
-                    fmt["Bad_Rate"] = "{:.2%}"
-                if "Cumul_Bad_Pct" in dec.columns:
-                    fmt["Cumul_Bad_Pct"] = "{:.2%}"
-                if "Lift" in dec.columns:
-                    fmt["Lift"] = "{:.2f}"
-                st.dataframe(
-                    dec.style.format(fmt),
-                    use_container_width=True, hide_index=True,
+                fig = go.Figure()
+                fig.add_trace(go.Histogram(
+                    x=scores[yh.values == 0], name="Non-Default",
+                    marker_color=C1, opacity=0.7, nbinsx=50, histnorm="probability density",
+                ))
+                fig.add_trace(go.Histogram(
+                    x=scores[yh.values == 1], name="Default",
+                    marker_color=C2, opacity=0.7, nbinsx=50, histnorm="probability density",
+                ))
+                fig.update_layout(
+                    template=T, barmode="overlay",
+                    xaxis_title="Credit Score", yaxis_title="Density",
+                    height=420, margin=dict(t=30),
+                    legend=dict(orientation="h", yanchor="top", y=1.1),
                 )
-            except Exception:
-                st.caption("Decile analysis not available.")
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.markdown("##### Default Rate by Score Band")
+                sdf = pd.DataFrame({"score": scores, "default": yh.values})
+                sdf["band"] = pd.cut(
+                    sdf["score"],
+                    bins=[300, 450, 550, 620, 680, 750, 850],
+                    labels=["300-450", "450-550", "550-620", "620-680", "680-750", "750-850"],
+                )
+                band = sdf.groupby("band", observed=False)["default"].agg(["mean", "count"]).reset_index()
+                band.columns = ["Band", "Default Rate", "Count"]
+
+                fig2 = go.Figure(go.Bar(
+                    x=band["Band"], y=band["Default Rate"],
+                    marker_color=[C2 if r > 0.15 else (C5 if r > 0.05 else C3) for r in band["Default Rate"]],
+                    text=[f"{r:.1%}" for r in band["Default Rate"]],
+                    textposition="outside", textfont=dict(color=TEXT),
+                ))
+                fig2.update_layout(
+                    template=T, yaxis_title="Default Rate",
+                    yaxis_tickformat=".0%", height=360, margin=dict(t=20),
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+
+                st.markdown("##### Decile Analysis")
+                try:
+                    from evaluate import decile_analysis
+                    dec = decile_analysis(yh.values, y_prob)
+                    fmt = {}
+                    if "Bad_Rate" in dec.columns:
+                        fmt["Bad_Rate"] = "{:.2%}"
+                    if "Cumul_Bad_Pct" in dec.columns:
+                        fmt["Cumul_Bad_Pct"] = "{:.2%}"
+                    if "Lift" in dec.columns:
+                        fmt["Lift"] = "{:.2f}"
+                    st.dataframe(
+                        dec.style.format(fmt),
+                        use_container_width=True, hide_index=True,
+                    )
+                except Exception:
+                    st.caption("Decile analysis not available.")
         else:
             st.warning("Test data not found. Ensure `data/processed/train_features.csv` exists.")
 
