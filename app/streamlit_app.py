@@ -302,15 +302,25 @@ _components.html("""
         pushMain(isOpen());
     }
 
+    // Debounce flag — ignore click-outside right after sidebar opens
+    var justOpened = false;
+
     // Close sidebar when clicking outside (on the main content area)
     doc.addEventListener('click', function(e) {
         if (!isOpen()) return;
+        if (justOpened) return;                             // ignore the click that opened it
         var sb = getSidebar();
         if (sb && sb.contains(e.target)) return;           // click inside sidebar
-        // also ignore the expand button in the header (hamburger)
-        var expandBtn = doc.querySelector('button[data-testid="stSidebarNavToggle"]')
-                     || doc.querySelector('button[data-testid="baseButton-header"]');
-        if (expandBtn && expandBtn.contains(e.target)) return;
+        // ignore ANY sidebar toggle button (expand or collapse)
+        var toggle = e.target.closest(
+            'button[data-testid="stSidebarCollapseButton"],'
+          + 'button[data-testid="stSidebarCollapsedControl"],'
+          + 'button[data-testid="stSidebarNavToggle"],'
+          + 'button[data-testid="baseButton-header"],'
+          + '[data-testid="collapsedControl"],'
+          + '[data-testid="stSidebarNavItems"]'
+        );
+        if (toggle) return;
         clickCollapseBtn();
     });
 
@@ -335,8 +345,15 @@ _components.html("""
     function startObserver() {
         var sb = getSidebar();
         if (!sb) return;
-        new MutationObserver(syncState)
-            .observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
+        new MutationObserver(function() {
+            syncState();
+            // When sidebar just opened, set debounce flag so the opening
+            // click doesn't immediately trigger click-outside close
+            if (isOpen()) {
+                justOpened = true;
+                setTimeout(function() { justOpened = false; }, 300);
+            }
+        }).observe(sb, { attributes: true, attributeFilter: ['aria-expanded'] });
         syncState();  // initial sync
     }
     setTimeout(startObserver, 500);
