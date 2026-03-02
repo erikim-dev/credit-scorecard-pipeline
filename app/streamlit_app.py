@@ -89,6 +89,24 @@ st.markdown(f"""
     /* hide chrome */
     #MainMenu, footer {{ visibility: hidden; }}
 
+    /* Mobile: auto-collapse sidebar, reveal on hamburger tap */
+    @media (max-width: 768px) {{
+        section[data-testid="stSidebar"] {{
+            position: fixed; left: 0; top: 0; z-index: 999;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }}
+        section[data-testid="stSidebar"][aria-expanded="true"] {{
+            transform: translateX(0);
+            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+        }}
+        /* keep the hamburger / collapse button visible */
+        button[data-testid="stSidebarCollapsedControl"] {{
+            display: block !important;
+            z-index: 1000;
+        }}
+    }}
+
     /* status pill */
     .pill {{
         display: inline-block; padding: 2px 10px; border-radius: 12px;
