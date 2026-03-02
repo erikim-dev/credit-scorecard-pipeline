@@ -140,40 +140,43 @@ def load_models():
     return art
 
 
-@st.cache_data(show_spinner=False)
 def load_test_data():
-    """Load test/training data for model evaluation."""
+    """Load test/training data for model evaluation.
+    
+    Note: No caching to ensure fresh data loads on every page refresh.
+    """
     # Try multiple path resolution strategies
     possible_paths = [
-        ROOT / "data" / "processed" / "train_features.csv",
+        pathlib.Path(__file__).resolve().parent.parent / "data" / "processed" / "train_features.csv",
         pathlib.Path("data") / "processed" / "train_features.csv",
         pathlib.Path(".") / "data" / "processed" / "train_features.csv",
+        ROOT / "data" / "processed" / "train_features.csv",
     ]
     
     for p in possible_paths:
-        if p.exists():
-            try:
+        try:
+            if p.exists():
                 df = pd.read_csv(p)
                 # Verify TARGET column exists
                 if "TARGET" not in df.columns:
-                    print(f"[ERROR] TARGET column not found in {p}")
-                    return None
+                    continue
                 print(f"[OK] Loaded test data from {p}: {len(df)} rows, {len(df.columns)} cols")
                 return df
-            except Exception as e:
-                print(f"[ERROR] Failed to read {p}: {e}")
-                continue
+        except Exception as e:
+            continue
     
     # Log all paths that were checked
-    print(f"[ERROR] Test data not found. Checked paths:")
-    for p in possible_paths:
-        print(f"  - {p.resolve()}")
+    print(f"[ERROR] Test data not found. Checked {len(possible_paths)} paths")
     return None
 
 
-@st.cache_data(show_spinner=False)
+
+
 def load_comparison():
-    """Load model comparison metrics."""
+    """Load model comparison metrics.
+    
+    Note: No caching to ensure fresh metrics on every refresh.
+    """
     p = ROOT / "reports" / "model_comparison.json"
     if p.exists():
         try:
